@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Truyện Full Sạch + Grok</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📖 Truyện Full Sạch + Grok AI</h1>
+      <p>Đọc không quảng cáo • Hỏi Grok về truyện</p>
+    </header>
+
+    <div class="input-area">
+      <input type="text" id="url" placeholder="Dán link chương Truyenfull.vision vào đây">
+      <button onclick="loadChapter()">📖 Đọc Chương</button>
+    </div>
+
+    <div class="api-key-area">
+      <input type="password" id="grok-key" placeholder="Dán Grok API Key (lấy tại console.x.ai)">
+      <small><a href="https://console.x.ai/" target="_blank">Lấy API Key Grok miễn phí</a></small>
+    </div>
+
+    <div id="result">
+      <div id="loading" class="loading">Đang tải chương...</div>
+      <h2 id="title" class="chapter-title"></h2>
+      <div id="content" class="content"></div>
+
+      <div class="grok-section">
+        <h3>🤖 Hỏi Grok về chương này</h3>
+        <textarea id="question" placeholder="Ví dụ: Tóm tắt chương này, Nhân vật A là ai, Plot twist gì sắp xảy ra?..."></textarea>
+        <button onclick="askGrok()">🚀 Gửi cho Grok</button>
+        <div id="grok-answer" class="grok-answer"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
