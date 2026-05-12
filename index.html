@@ -3,40 +3,116 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Truyện Full Sạch + Grok</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Truyện Full Sạch - Đọc Không Quảng Cáo</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+    header {
+      background: #1e3a8a;
+      color: white;
+      padding: 25px;
+      text-align: center;
+    }
+    header h1 { font-size: 28px; }
+    .input-area {
+      padding: 20px;
+      background: #f8f9fa;
+      text-align: center;
+    }
+    input {
+      padding: 14px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      width: 75%;
+    }
+    button {
+      padding: 14px 28px;
+      font-size: 16px;
+      background: #1e3a8a;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover { background: #2e4a9a; }
+    .loading, .content {
+      padding: 30px;
+      font-size: 18px;
+      line-height: 1.85;
+    }
+    .chapter-title {
+      text-align: center;
+      padding: 20px;
+      color: #1e3a8a;
+      font-size: 26px;
+      background: #f8f9fa;
+    }
+    footer {
+      text-align: center;
+      padding: 15px;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>📖 Truyện Full Sạch + Grok AI</h1>
-      <p>Đọc không quảng cáo • Hỏi Grok về truyện</p>
+      <h1>📖 Truyện Full Sạch</h1>
+      <p>Đọc truyện không quảng cáo</p>
     </header>
 
     <div class="input-area">
-      <input type="text" id="url" placeholder="Dán link chương Truyenfull.vision vào đây">
+      <input type="text" id="url" placeholder="Dán link chương Truyenfull.vision vào đây" autocomplete="off">
       <button onclick="loadChapter()">📖 Đọc Chương</button>
     </div>
 
-    <div class="api-key-area">
-      <input type="password" id="grok-key" placeholder="Dán Grok API Key (lấy tại console.x.ai)">
-      <small><a href="https://console.x.ai/" target="_blank">Lấy API Key Grok miễn phí</a></small>
-    </div>
-
     <div id="result">
-      <div id="loading" class="loading">Đang tải chương...</div>
+      <div id="loading" class="loading" style="display:none;">Đang tải chương...</div>
       <h2 id="title" class="chapter-title"></h2>
       <div id="content" class="content"></div>
-
-      <div class="grok-section">
-        <h3>🤖 Hỏi Grok về chương này</h3>
-        <textarea id="question" placeholder="Ví dụ: Tóm tắt chương này, Nhân vật A là ai, Plot twist gì sắp xảy ra?..."></textarea>
-        <button onclick="askGrok()">🚀 Gửi cho Grok</button>
-        <div id="grok-answer" class="grok-answer"></div>
-      </div>
     </div>
+
+    <footer>
+      Đọc truyện sạch • GitHub Pages
+    </footer>
   </div>
 
-  <script src="script.js"></script>
-</body>
-</html>
+  <script>
+    async function loadChapter() {
+      const url = document.getElementById('url').value.trim();
+      if (!url) return alert("Vui lòng dán link chương!");
+
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('content').innerHTML = '';
+      document.getElementById('title').textContent = '';
+
+      try {
+        const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
+        const data = await res.json();
+        const doc = new DOMParser().parseFromString(data.contents, 'text/html');
+
+        // Lấy tiêu đề
+        const title = doc.querySelector('h1') || doc.querySelector('title');
+        document.getElementById('title').textContent = title ? title.textContent.trim() : 'Chương Truyện';
+
+        // Lấy nội dung
+        let contentDiv = doc.querySelector('div.chapter-c') || 
+                          doc.querySelector('div.reading-content') ||
+                          doc.querySelector('div#chapter-content') ||
+                          doc.querySelector('div.noidung') ||
