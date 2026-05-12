@@ -3,143 +3,176 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Truyện Full Sạch</title>
+  <title>KIEN NE - Truyện Full Sạch</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
       font-family: 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #0f0f0f;
+      color: #ddd;
       min-height: 100vh;
-      padding: 20px;
     }
-    .container {
-      max-width: 1000px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    .header {
+      background: #1a1a1a;
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #333;
+    }
+    .logo { font-size: 24px; font-weight: bold; color: #ffd700; }
+    .search {
+      width: 500px;
+      padding: 12px 20px;
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 8px;
+      color: white;
+      font-size: 16px;
+    }
+    .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+    h1 { text-align: center; margin: 40px 0 10px; color: #ffd700; font-size: 42px; }
+    p { text-align: center; color: #aaa; margin-bottom: 30px; }
+    
+    .section { margin-bottom: 40px; }
+    .section-title { font-size: 20px; margin-bottom: 15px; color: #ffd700; }
+    
+    .genres {
+      display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px;
+    }
+    .genre-btn {
+      background: #222; color: #ddd; padding: 8px 16px; border-radius: 20px;
+      cursor: pointer; font-size: 14px;
+    }
+    .genre-btn:hover { background: #ffd700; color: black; }
+
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 20px;
+    }
+    .book-card {
+      background: #1a1a1a;
+      border-radius: 8px;
       overflow: hidden;
-    }
-    header {
-      background: #1e3a8a;
-      color: white;
-      padding: 30px;
-      text-align: center;
-    }
-    header h1 { font-size: 32px; }
-    .input-area {
-      padding: 25px;
-      background: #f8f9fa;
-      text-align: center;
-    }
-    input {
-      width: 70%;
-      padding: 16px;
-      font-size: 17px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-    }
-    button {
-      padding: 16px 32px;
-      font-size: 17px;
-      background: #1e3a8a;
-      color: white;
-      border: none;
-      border-radius: 8px;
       cursor: pointer;
-      margin-left: 10px;
+      transition: transform 0.2s;
     }
-    button:hover { background: #2e4a9a; }
-    .loading, .content {
-      padding: 40px;
-      font-size: 18.5px;
-      line-height: 1.9;
-      min-height: 300px;
+    .book-card:hover { transform: scale(1.05); }
+    .book-card img {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
     }
-    .chapter-title {
+    .book-info {
+      padding: 12px;
       text-align: center;
-      padding: 25px;
-      font-size: 26px;
-      color: #1e3a8a;
-      background: #f8f9fa;
     }
-    footer {
-      text-align: center;
-      padding: 20px;
-      color: #666;
+    .book-info h4 { font-size: 15px; margin-bottom: 5px; }
+    
+    .reader {
+      background: #1a1a1a;
+      padding: 30px;
+      border-radius: 12px;
+      margin-top: 40px;
     }
+    input[type="text"] { width: 80%; padding: 15px; font-size: 17px; }
+    button { padding: 15px 30px; font-size: 17px; background: #ffd700; color: black; border: none; border-radius: 8px; cursor: pointer; }
+    .content { font-size: 18px; line-height: 1.9; padding: 30px; background: #111; border-radius: 8px; margin-top: 20px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>📖 Truyện Full Sạch</h1>
-      <p>Đọc truyện không quảng cáo</p>
-    </header>
+  <div class="header">
+    <div class="logo">KIEN NE</div>
+    <input type="text" class="search" id="searchInput" placeholder="Tìm tên truyện...">
+  </div>
 
-    <div class="input-area">
+  <div class="container">
+    <h1>KIEN NE</h1>
+    <p>Trình đọc truyện sạch — không quảng cáo, không phiền nhiễu.</p>
+
+    <div class="section">
+      <div class="section-title">Thể loại phổ biến</div>
+      <div class="genres">
+        <div class="genre-btn" onclick="searchGenre('Tiên Hiệp')">Tiên Hiệp</div>
+        <div class="genre-btn" onclick="searchGenre('Ngôn Tình')">Ngôn Tình</div>
+        <div class="genre-btn" onclick="searchGenre('Đam Mỹ')">Đam Mỹ</div>
+        <div class="genre-btn" onclick="searchGenre('Kiếm Hiệp')">Kiếm Hiệp</div>
+        <div class="genre-btn" onclick="searchGenre('Huyền Huyễn')">Huyền Huyễn</div>
+        <div class="genre-btn" onclick="searchGenre('Đô Thị')">Đô Thị</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📖 Đọc gần đây</div>
+      <div class="history-grid" id="history"></div>
+    </div>
+
+    <div class="reader">
       <input type="text" id="url" placeholder="Dán link chương Truyenfull.vision vào đây">
       <button onclick="loadChapter()">📖 Đọc Chương</button>
-    </div>
 
-    <div id="result">
-      <div id="loading" class="loading" style="display:none;">Đang tải chương...</div>
-      <h2 id="title" class="chapter-title"></h2>
+      <div id="loading" style="display:none; margin-top:20px; color:#ffd700;">Đang tải chương...</div>
+      <h2 id="title" style="margin:25px 0; text-align:center; color:#ffd700;"></h2>
       <div id="content" class="content"></div>
     </div>
-
-    <footer>
-      Truyện Full Reader • GitHub Pages
-    </footer>
   </div>
 
   <script>
+    let history = JSON.parse(localStorage.getItem('truyenHistory')) || [];
+
+    function saveToHistory(title, url, cover = '') {
+      history = history.filter(item => item.url !== url);
+      history.unshift({ title, url, cover, time: new Date().toISOString() });
+      if (history.length > 12) history.pop();
+      localStorage.setItem('truyenHistory', JSON.stringify(history));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const container = document.getElementById('history');
+      container.innerHTML = '';
+      history.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'book-card';
+        div.innerHTML = `
+          <img src="${item.cover || 'https://via.placeholder.com/160x220/1a1a1a/ffd700?text=Truyện'}" alt="${item.title}">
+          <div class="book-info">
+            <h4>${item.title}</h4>
+            <small>${new Date(item.time).toLocaleDateString('vi-VN')}</small>
+          </div>
+        `;
+        div.onclick = () => {
+          document.getElementById('url').value = item.url;
+          loadChapter();
+        };
+        container.appendChild(div);
+      });
+    }
+
     async function loadChapter() {
-      const urlInput = document.getElementById('url').value.trim();
-      if (!urlInput) {
-        alert("Vui lòng dán link chương!");
-        return;
-      }
+      const url = document.getElementById('url').value.trim();
+      if (!url) return alert("Dán link chương vào!");
 
       document.getElementById('loading').style.display = 'block';
       document.getElementById('content').innerHTML = '';
       document.getElementById('title').textContent = '';
 
       try {
-        const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(urlInput));
-        if (!res.ok) throw new Error("Không tải được trang");
-        
+        const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
         const data = await res.json();
         const doc = new DOMParser().parseFromString(data.contents, 'text/html');
 
-        // Tiêu đề
         const title = doc.querySelector('h1') || doc.querySelector('title');
-        document.getElementById('title').textContent = title ? title.textContent.trim() : 'Chương Truyện';
+        const titleText = title ? title.textContent.trim() : 'Chương Truyện';
+        document.getElementById('title').textContent = titleText;
 
-        // Nội dung
-        let content = doc.querySelector('div.chapter-c') || 
-                      doc.querySelector('div.reading-content') ||
-                      doc.querySelector('div#chapter-content') ||
-                      doc.querySelector('div.noidung') ||
-                      doc.querySelector('article');
+        let contentDiv = doc.querySelector('div.chapter-c') || 
+                          doc.querySelector('div.reading-content') ||
+                          doc.querySelector('div#chapter-content') ||
+                          doc.querySelector('div.noidung') ||
+                          doc.querySelector('article');
 
-        if (content) {
-          content.querySelectorAll('script, style, ins, iframe, button, .ads, .qc, .banner').forEach(el => el.remove());
-          document.getElementById('content').innerHTML = content.innerHTML;
-        } else {
-          document.getElementById('content').innerHTML = '<p style="color:red; text-align:center;">Không tìm thấy nội dung. Thử link khác.</p>';
-        }
-      } catch (err) {
-        document.getElementById('content').innerHTML = `<p style="color:red; text-align:center;">Lỗi: ${err.message}</p>`;
-      }
-
-      document.getElementById('loading').style.display = 'none';
-    }
-
-    // Nhấn Enter
-    document.getElementById('url').addEventListener('keypress', e => {
-      if (e.key === 'Enter') loadChapter();
-    });
-  </script>
-</body>
-</html>
+        if (contentDiv) {
+          contentDiv.querySelectorAll('script, style, ins, iframe, button, .ads, .qc').forEach(el => el.remove());
+          document.getElementById('content').innerHTML = contentDiv.innerHTML;
