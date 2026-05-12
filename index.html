@@ -2,120 +2,367 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KIEN NE - Truyện Full Sạch</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>Truyện Full Sạch</title>
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --primary: #facc15;
+      --bg: #0a0a0a;
+      --card: #121212;
+      --text: #e5e5e5;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #0f0f0f;
-      color: #ddd;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
+      line-height: 1.6;
     }
     .header {
-      background: #1a1a1a;
-      padding: 15px 20px;
+      position: sticky;
+      top: 0;
+      background: #111;
+      padding: 15px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid #333;
-      position: sticky;
-      top: 0;
       z-index: 100;
     }
-    .logo { font-size: 26px; font-weight: bold; color: #ffd700; }
+    .logo {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--primary);
+    }
     .search {
-      width: 550px;
-      padding: 14px 20px;
+      flex: 1;
+      max-width: 420px;
+      margin: 0 16px;
+      padding: 12px 20px;
       background: #222;
       border: 1px solid #444;
-      border-radius: 999px;
+      border-radius: 50px;
       color: white;
       font-size: 16px;
     }
-    .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
-    h1 { text-align: center; margin: 40px 0 10px; color: #ffd700; font-size: 42px; }
-    p { text-align: center; color: #aaa; margin-bottom: 30px; }
-    
-    .section { margin-bottom: 40px; }
-    .section-title { font-size: 20px; margin-bottom: 15px; color: #ffd700; }
-    
-    .genres { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; }
-    .genre-btn {
-      background: #222; color: #ddd; padding: 10px 18px; border-radius: 999px;
-      cursor: pointer; font-size: 15px;
+    .container { max-width: 1280px; margin: 0 auto; padding: 16px; }
+
+    .section-title {
+      font-size: 20px;
+      margin: 24px 0 12px;
+      color: var(--primary);
     }
-    .genre-btn:hover { background: #ffd700; color: black; }
+
+    .genres {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .genre-btn {
+      background: #222;
+      color: #ddd;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .genre-btn:hover { background: var(--primary); color: black; }
 
     .history-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 16px;
     }
-    .book-card {
-      background: #1a1a1a;
-      border-radius: 10px;
+    .history-card {
+      background: var(--card);
+      border-radius: 12px;
       overflow: hidden;
       cursor: pointer;
-      transition: 0.3s;
     }
-    .book-card:hover { transform: scale(1.06); }
-    .book-card img { width: 100%; height: 220px; object-fit: cover; }
-    .book-info { padding: 12px; text-align: center; }
+    .history-card img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+    }
+    .history-info {
+      padding: 10px;
+      text-align: center;
+      font-size: 14px;
+    }
 
     .reader {
-      background: #1a1a1a;
-      padding: 30px;
-      border-radius: 12px;
-      margin-top: 40px;
+      background: var(--card);
+      border-radius: 16px;
+      padding: 20px;
+      margin-top: 20px;
     }
-    .content { 
-      font-size: 18px; 
-      line-height: 1.9; 
-      padding: 30px; 
-      background: #111; 
-      border-radius: 8px; 
-      margin-top: 20px; 
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .input-group input {
+      flex: 1;
+      padding: 14px;
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 12px;
+      color: white;
+      font-size: 16px;
+    }
+    button {
+      padding: 14px 24px;
+      background: var(--primary);
+      color: black;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { opacity: 0.9; }
+
+    .chapter-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .content {
+      font-size: 18px;
+      line-height: 1.85;
+      padding: 25px;
+      background: #0a0a0a;
+      border-radius: 12px;
+      min-height: 50vh;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--primary);
+      font-size: 18px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 999px;
+      font-size: 14px;
+      z-index: 1000;
+      opacity: 0;
+      transition: all 0.3s;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="logo">KIEN NE</div>
+    <div class="logo">TRUYỆN FULL</div>
     <input type="text" class="search" id="searchInput" placeholder="Tìm tên truyện...">
   </div>
 
   <div class="container">
-    <h1>KIEN NE</h1>
-    <p>Trình đọc truyện sạch — không quảng cáo</p>
+    <!-- Thể loại -->
+    <div class="section-title">Thể loại phổ biến</div>
+    <div class="genres" id="genres"></div>
 
-    <div class="section">
-      <div class="section-title">Thể loại phổ biến</div>
-      <div class="genres">
-        <div class="genre-btn" onclick="searchTruyen('Tiên Hiệp')">Tiên Hiệp</div>
-        <div class="genre-btn" onclick="searchTruyen('Ngôn Tình')">Ngôn Tình</div>
-        <div class="genre-btn" onclick="searchTruyen('Huyền Huyễn')">Huyền Huyễn</div>
-        <div class="genre-btn" onclick="searchTruyen('Đô Thị')">Đô Thị</div>
-        <div class="genre-btn" onclick="searchTruyen('Kiếm Hiệp')">Kiếm Hiệp</div>
-        <div class="genre-btn" onclick="searchTruyen('Đam Mỹ')">Đam Mỹ</div>
-      </div>
-    </div>
+    <!-- Đọc gần đây -->
+    <div class="section-title">📖 Đọc gần đây</div>
+    <div class="history-grid" id="historyGrid"></div>
 
-    <div class="section">
-      <div class="section-title">📖 Đọc gần đây</div>
-      <div class="history-grid" id="history"></div>
-    </div>
-
+    <!-- Reader -->
     <div class="reader">
-      <input type="text" id="url" placeholder="Dán link chương Truyenfull.vision" style="width:80%; padding:15px;">
-      <button onclick="loadChapter()" style="padding:15px 30px; background:#ffd700; color:black; border:none; border-radius:8px; cursor:pointer;">📖 Đọc Chương</button>
+      <div class="input-group">
+        <input type="text" id="chapterUrl" placeholder="Dán link chương Truyenfull.vision">
+        <button onclick="loadChapter()">Đọc Chương</button>
+      </div>
 
-      <div id="loading" style="display:none; margin:20px 0; color:#ffd700;">Đang tải...</div>
-      <h2 id="title" style="margin:25px 0; text-align:center; color:#ffd700;"></h2>
-      <div id="content" class="content"></div>
+      <div id="loading" class="loading" style="display: none;">Đang tải chương...</div>
+
+      <div id="chapterHeader" class="chapter-header" style="display: none;">
+        <h2 id="chapterTitle"></h2>
+        <div class="controls">
+          <button onclick="prevChapter()">◀ Trước</button>
+          <button onclick="nextChapter()">Sau ▶</button>
+          <button onclick="adjustFont(-2)">A-</button>
+          <button onclick="adjustFont(2)">A+</button>
+          <button onclick="toggleTheme()">☀</button>
+        </div>
+      </div>
+
+      <div id="chapterContent" class="content"></div>
     </div>
   </div>
 
+  <div id="toast" class="toast"></div>
+
   <script>
-    // Tìm truyện
-    function searchTruyen(keyword
+    // ================== CONFIG ==================
+    const CORS = 'https://api.allorigins.win/get?url=';
+    let currentUrl = '';
+    let fontSize = 18;
+    let isDark = true;
+
+    // ================== GENRES ==================
+    const genres = ["Tiên Hiệp", "Ngôn Tình", "Huyền Huyễn", "Đô Thị", "Kiếm Hiệp", "Đam Mỹ", "Lịch Sử", "Trọng Sinh"];
+    const genresContainer = document.getElementById('genres');
+    genres.forEach(g => {
+      const btn = document.createElement('div');
+      btn.className = 'genre-btn';
+      btn.textContent = g;
+      btn.onclick = () => window.open(`https://truyenfull.vision/tim-kiem/${encodeURIComponent(g)}`, '_blank');
+      genresContainer.appendChild(btn);
+    });
+
+    // ================== HISTORY ==================
+    let history = JSON.parse(localStorage.getItem('truyenHistory')) || [];
+
+    function saveHistory(title, url) {
+      history = history.filter(item => item.url !== url);
+      history.unshift({ title, url, time: Date.now() });
+      if (history.length > 12) history.pop();
+      localStorage.setItem('truyenHistory', JSON.stringify(history));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const container = document.getElementById('historyGrid');
+      container.innerHTML = '';
+      history.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        card.innerHTML = `
+          <img src="https://via.placeholder.com/300x400/1a1a1a/ffd700?text=${encodeURIComponent(item.title.substring(0,15))}" alt="">
+          <div class="history-info">
+            <div>${item.title}</div>
+            <small>${new Date(item.time).toLocaleDateString('vi-VN')}</small>
+          </div>
+        `;
+        card.onclick = () => {
+          document.getElementById('chapterUrl').value = item.url;
+          loadChapter();
+        };
+        container.appendChild(card);
+      });
+    }
+
+    // ================== CHAPTER NAVIGATION ==================
+    function getChapterNumber(url) {
+      const match = url.match(/chuong-(\d+)/i);
+      return match ? parseInt(match[1]) : null;
+    }
+
+    function changeChapter(offset) {
+      if (!currentUrl) return;
+      const num = getChapterNumber(currentUrl);
+      if (!num) return alert("Không xác định được số chương");
+      
+      const newNum = num + offset;
+      const newUrl = currentUrl.replace(/chuong-\d+/i, `chuong-${newNum}`);
+      document.getElementById('chapterUrl').value = newUrl;
+      loadChapter();
+    }
+
+    function prevChapter() { changeChapter(-1); }
+    function nextChapter() { changeChapter(1); }
+
+    // ================== FONT & THEME ==================
+    function adjustFont(delta) {
+      fontSize = Math.max(14, Math.min(28, fontSize + delta));
+      document.getElementById('chapterContent').style.fontSize = fontSize + 'px';
+    }
+
+    function toggleTheme() {
+      isDark = !isDark;
+      document.body.style.background = isDark ? '#0a0a0a' : '#f8f9fa';
+      document.body.style.color = isDark ? '#e5e5e5' : '#222';
+      showToast(isDark ? 'Đã chuyển sang Dark Mode' : 'Đã chuyển sang Light Mode');
+    }
+
+    // ================== MAIN READER ==================
+    async function loadChapter() {
+      const urlInput = document.getElementById('chapterUrl').value.trim();
+      if (!urlInput) return alert("Vui lòng dán link chương!");
+
+      currentUrl = urlInput;
+      const loading = document.getElementById('loading');
+      const contentEl = document.getElementById('chapterContent');
+      const headerEl = document.getElementById('chapterHeader');
+      const titleEl = document.getElementById('chapterTitle');
+
+      loading.style.display = 'block';
+      contentEl.innerHTML = '';
+      headerEl.style.display = 'none';
+
+      try {
+        const res = await fetch(CORS + encodeURIComponent(urlInput));
+        const data = await res.json();
+        const doc = new DOMParser().parseFromString(data.contents, 'text/html');
+
+        // Title
+        const title = doc.querySelector('h1') || doc.querySelector('title');
+        const titleText = title ? title.textContent.trim() : 'Chương Truyện';
+        titleEl.textContent = titleText;
+
+        // Content
+        const selectors = ['div.chapter-c', 'div.reading-content', 'div#chapter-content', 'div.noidung', 'article', '.content'];
+        let contentDiv = null;
+        for (let sel of selectors) {
+          contentDiv = doc.querySelector(sel);
+          if (contentDiv && contentDiv.textContent.trim().length > 500) break;
+        }
+
+        if (contentDiv) {
+          // Xóa quảng cáo
+          contentDiv.querySelectorAll('script, style, ins, iframe, button, .ads, .qc, .banner, [class*="quang-cao"]').forEach(el => el.remove());
+          
+          contentEl.innerHTML = contentDiv.innerHTML;
+          headerEl.style.display = 'flex';
+          saveHistory(titleText, urlInput);
+        } else {
+          contentEl.innerHTML = '<p style="color:#ff6b6b;text-align:center;padding:40px;">Không tìm thấy nội dung chương.</p>';
+        }
+      } catch (err) {
+        contentEl.innerHTML = `<p style="color:#ff6b6b;text-align:center;padding:40px;">Lỗi tải chương: ${err.message}</p>`;
+      } finally {
+        loading.style.display = 'none';
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.style.opacity = '1';
+      setTimeout(() => toast.style.opacity = '0', 2500);
+    }
+
+    // ================== EVENT LISTENERS ==================
+    document.getElementById('searchInput').addEventListener('keypress', e => {
+      if (e.key === 'Enter') {
+        const keyword = e.target.value.trim();
+        if (keyword) window.open(`https://truyenfull.vision/tim-kiem/${encodeURIComponent(keyword)}`, '_blank');
+      }
+    });
+
+    document.getElementById('chapterUrl').addEventListener('keypress', e => {
+      if (e.key === 'Enter') loadChapter();
+    });
+
+    // Init
+    renderHistory();
+  </script>
+</body>
+</html>
