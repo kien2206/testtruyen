@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Truyện Full Sạch - Đọc Không Quảng Cáo</title>
+  <title>Truyện Full Sạch</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
@@ -11,7 +11,6 @@
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       padding: 20px;
-      color: #333;
     }
     .container {
       max-width: 1000px;
@@ -24,49 +23,50 @@
     header {
       background: #1e3a8a;
       color: white;
-      padding: 25px;
+      padding: 30px;
       text-align: center;
     }
-    header h1 { font-size: 28px; }
+    header h1 { font-size: 32px; }
     .input-area {
-      padding: 20px;
+      padding: 25px;
       background: #f8f9fa;
       text-align: center;
     }
     input {
-      padding: 14px;
-      font-size: 16px;
+      width: 70%;
+      padding: 16px;
+      font-size: 17px;
       border: 1px solid #ccc;
       border-radius: 8px;
-      width: 75%;
     }
     button {
-      padding: 14px 28px;
-      font-size: 16px;
+      padding: 16px 32px;
+      font-size: 17px;
       background: #1e3a8a;
       color: white;
       border: none;
       border-radius: 8px;
       cursor: pointer;
+      margin-left: 10px;
     }
     button:hover { background: #2e4a9a; }
     .loading, .content {
-      padding: 30px;
-      font-size: 18px;
-      line-height: 1.85;
+      padding: 40px;
+      font-size: 18.5px;
+      line-height: 1.9;
+      min-height: 300px;
     }
     .chapter-title {
       text-align: center;
-      padding: 20px;
-      color: #1e3a8a;
+      padding: 25px;
       font-size: 26px;
+      color: #1e3a8a;
       background: #f8f9fa;
     }
     footer {
       text-align: center;
-      padding: 15px;
+      padding: 20px;
       color: #666;
-      font-size: 14px;
     }
   </style>
 </head>
@@ -78,7 +78,7 @@
     </header>
 
     <div class="input-area">
-      <input type="text" id="url" placeholder="Dán link chương Truyenfull.vision vào đây" autocomplete="off">
+      <input type="text" id="url" placeholder="Dán link chương Truyenfull.vision vào đây">
       <button onclick="loadChapter()">📖 Đọc Chương</button>
     </div>
 
@@ -89,30 +89,57 @@
     </div>
 
     <footer>
-      Đọc truyện sạch • GitHub Pages
+      Truyện Full Reader • GitHub Pages
     </footer>
   </div>
 
   <script>
     async function loadChapter() {
-      const url = document.getElementById('url').value.trim();
-      if (!url) return alert("Vui lòng dán link chương!");
+      const urlInput = document.getElementById('url').value.trim();
+      if (!urlInput) {
+        alert("Vui lòng dán link chương!");
+        return;
+      }
 
       document.getElementById('loading').style.display = 'block';
       document.getElementById('content').innerHTML = '';
       document.getElementById('title').textContent = '';
 
       try {
-        const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
+        const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(urlInput));
+        if (!res.ok) throw new Error("Không tải được trang");
+        
         const data = await res.json();
         const doc = new DOMParser().parseFromString(data.contents, 'text/html');
 
-        // Lấy tiêu đề
+        // Tiêu đề
         const title = doc.querySelector('h1') || doc.querySelector('title');
         document.getElementById('title').textContent = title ? title.textContent.trim() : 'Chương Truyện';
 
-        // Lấy nội dung
-        let contentDiv = doc.querySelector('div.chapter-c') || 
-                          doc.querySelector('div.reading-content') ||
-                          doc.querySelector('div#chapter-content') ||
-                          doc.querySelector('div.noidung') ||
+        // Nội dung
+        let content = doc.querySelector('div.chapter-c') || 
+                      doc.querySelector('div.reading-content') ||
+                      doc.querySelector('div#chapter-content') ||
+                      doc.querySelector('div.noidung') ||
+                      doc.querySelector('article');
+
+        if (content) {
+          content.querySelectorAll('script, style, ins, iframe, button, .ads, .qc, .banner').forEach(el => el.remove());
+          document.getElementById('content').innerHTML = content.innerHTML;
+        } else {
+          document.getElementById('content').innerHTML = '<p style="color:red; text-align:center;">Không tìm thấy nội dung. Thử link khác.</p>';
+        }
+      } catch (err) {
+        document.getElementById('content').innerHTML = `<p style="color:red; text-align:center;">Lỗi: ${err.message}</p>`;
+      }
+
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    // Nhấn Enter
+    document.getElementById('url').addEventListener('keypress', e => {
+      if (e.key === 'Enter') loadChapter();
+    });
+  </script>
+</body>
+</html>
