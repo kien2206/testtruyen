@@ -5,104 +5,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KIEN NE - Truyện Sạch</title>
   <style>
-    :root {
-      --primary: #facc15;
-      --bg: #0a0a0a;
-      --card: #121212;
-      --text: #e5e5e5;
-    }
+    :root { --primary: #facc15; --bg: #0a0a0a; --card: #121212; }
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: system-ui, sans-serif;
       background: var(--bg);
-      color: var(--text);
+      color: #ddd;
       min-height: 100vh;
-      line-height: 1.6;
     }
     .header {
-      position: sticky;
-      top: 0;
-      background: #111;
-      padding: 14px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 1px solid #333;
-      z-index: 100;
+      position: sticky; top: 0; background: #111; padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #333; z-index: 100;
     }
     .logo { font-size: 26px; font-weight: 900; color: var(--primary); }
-    .search {
-      flex: 1;
-      padding: 13px 20px;
-      background: #222;
-      border: 1px solid #444;
-      border-radius: 50px;
-      color: white;
-      font-size: 16px;
-    }
+    .search { flex: 1; padding: 13px 20px; background: #222; border: 1px solid #444; border-radius: 50px; color: white; font-size: 16px; }
 
     .container { max-width: 1280px; margin: 0 auto; padding: 16px; }
     .section-title { color: var(--primary); margin: 28px 0 14px; font-size: 21px; }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-      gap: 16px;
-    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 16px; }
     .card {
-      background: var(--card);
-      border-radius: 12px;
-      overflow: hidden;
-      cursor: pointer;
-      transition: transform 0.25s;
+      background: var(--card); border-radius: 12px; overflow: hidden; cursor: pointer;
     }
-    .card:hover { transform: scale(1.06); }
+    .card:hover { transform: scale(1.05); }
     .card img { width: 100%; height: 205px; object-fit: cover; }
     .card-info { padding: 12px; text-align: center; font-size: 14.5px; }
 
     .reader {
-      background: var(--card);
-      padding: 20px;
-      border-radius: 16px;
-      margin-top: 30px;
+      background: var(--card); padding: 20px; border-radius: 16px; margin-top: 30px;
     }
-    .input-group {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
+    .input-group { display: flex; gap: 10px; margin-bottom: 16px; }
     .input-group input {
-      flex: 1;
-      padding: 15px;
-      background: #222;
-      border: 1px solid #444;
-      border-radius: 12px;
-      color: white;
-      font-size: 16px;
+      flex: 1; padding: 15px; background: #222; border: 1px solid #444;
+      border-radius: 12px; color: white; font-size: 16px;
     }
     button {
-      padding: 15px 28px;
-      background: var(--primary);
-      color: black;
-      border: none;
-      border-radius: 12px;
-      font-weight: 600;
-      cursor: pointer;
+      padding: 15px 28px; background: var(--primary); color: black;
+      border: none; border-radius: 12px; font-weight: 600; cursor: pointer;
     }
     .content {
-      font-size: 18px;
-      line-height: 1.92;
-      padding: 32px;
-      background: #0a0a0a;
-      border-radius: 12px;
-      min-height: 50vh;
+      font-size: 18px; line-height: 1.92; padding: 32px; background: #0a0a0a;
+      border-radius: 12px; min-height: 50vh;
     }
-    .loading {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--primary);
-      font-size: 18px;
-    }
+    .loading { text-align: center; padding: 60px 20px; color: var(--primary); font-size: 18px; }
   </style>
 </head>
 <body>
@@ -117,13 +62,12 @@
       <div class="grid" id="historyGrid"></div>
     </div>
 
-    <!-- Reader -->
     <div class="reader">
       <div class="input-group">
         <input type="text" id="chapterUrl" placeholder="Dán link chương Truyenfull.vision">
         <button onclick="loadChapter()">Đọc Chương</button>
       </div>
-      <div id="loading" class="loading" style="display:none">Đang tải chương...</div>
+      <div id="loading" class="loading" style="display:none">Đang tải...</div>
       <h2 id="chapterTitle" style="color:var(--primary); text-align:center; margin:20px 0;"></h2>
       <div id="chapterContent" class="content"></div>
     </div>
@@ -139,64 +83,18 @@
       history.forEach(item => {
         const card = document.createElement('div');
         card.className = 'card';
-        card.innerHTML = `
-          <img src="https://via.placeholder.com/300x400/1a1a1a/facc15?text=Truyện" alt="">
-          <div class="card-info">${item.title}</div>
-        `;
-        card.onclick = () => {
-          document.getElementById('chapterUrl').value = item.url;
-          loadChapter();
-        };
+        card.innerHTML = `<img src="https://via.placeholder.com/300x400/1a1a1a/facc15?text=Truyện"><div class="card-info">${item.title}</div>`;
+        card.onclick = () => { document.getElementById('chapterUrl').value = item.url; loadChapter(); };
         container.appendChild(card);
       });
     }
 
-    // Tìm kiếm
-    async function searchTruyen(keyword) {
-      const main = document.getElementById('mainContent');
-      main.innerHTML = `<div class="section-title">🔎 Kết quả cho: "${keyword}"</div><div class="grid" id="searchGrid"></div>`;
-
-      try {
-        const res = await fetch(CORS + encodeURIComponent(`https://truyenfull.vision/tim-kiem/?tukhoa=${encodeURIComponent(keyword)}`));
-        const data = await res.json();
-        const doc = new DOMParser().parseFromString(data.contents, 'text/html');
-
-        const items = doc.querySelectorAll('.list-truyen .truyen-item, .row .col-sm-6, .truyen-list .item');
-        const grid = document.getElementById('searchGrid');
-
-        if (items.length === 0) {
-          grid.innerHTML = '<p style="color:#888; text-align:center; padding:40px; grid-column:1/-1;">Không tìm thấy truyện nào.</p>';
-          return;
-        }
-
-        items.forEach(item => {
-          const a = item.querySelector('a');
-          if (!a) return;
-          const title = a.textContent.trim();
-          const link = a.href;
-
-          const card = document.createElement('div');
-          card.className = 'card';
-          card.innerHTML = `
-            <img src="https://via.placeholder.com/300x400/1a1a1a/facc15?text=${title.substring(0,8)}" alt="">
-            <div class="card-info">${title}</div>
-          `;
-          card.onclick = () => window.open(link, '_blank');
-          grid.appendChild(card);
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    // Đọc chương
     async function loadChapter() {
       const url = document.getElementById('chapterUrl').value.trim();
-      if (!url) return alert("Vui lòng dán link chương!");
+      if (!url) return alert("Dán link chương vào!");
 
       document.getElementById('loading').style.display = 'block';
       document.getElementById('chapterContent').innerHTML = '';
-      document.getElementById('chapterTitle').textContent = '';
 
       try {
         const res = await fetch(CORS + encodeURIComponent(url));
@@ -208,4 +106,32 @@
 
         let contentDiv = doc.querySelector('div.chapter-c, div.reading-content, div#chapter-content, div.noidung, article');
         if (contentDiv) {
-          contentDiv.querySelectorAll('script, style, ins, iframe
+          contentDiv.querySelectorAll('script,style,ins,iframe,.ads,.qc').forEach(el => el.remove());
+          document.getElementById('chapterContent').innerHTML = contentDiv.innerHTML;
+
+          history.unshift({title, url});
+          if (history.length > 12) history.pop();
+          localStorage.setItem('truyenHistory', JSON.stringify(history));
+          renderHistory();
+        }
+      } catch (err) {
+        document.getElementById('chapterContent').innerHTML = `<p style="color:red;text-align:center;">Lỗi tải chương</p>`;
+      }
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    document.getElementById('searchInput').addEventListener('keypress', e => {
+      if (e.key === 'Enter') {
+        const kw = e.target.value.trim();
+        if (kw) window.open(`https://truyenfull.vision/tim-kiem/?tukhoa=${encodeURIComponent(kw)}`, '_blank');
+      }
+    });
+
+    document.getElementById('chapterUrl').addEventListener('keypress', e => {
+      if (e.key === 'Enter') loadChapter();
+    });
+
+    renderHistory();
+  </script>
+</body>
+</html>
