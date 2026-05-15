@@ -241,36 +241,19 @@
     color: var(--accent);
     margin-top: auto;
   }
-  /* Card từ nguồn ngoài (moboreader) — mở tab mới khi click */
+  /* Badge nhỏ trên card kết quả để phân biệt nguồn (vd: truyenhoan vs truyenfull mặc định) */
   .result-source-badge {
     display: inline-block;
     font-size: 10px;
     padding: 2px 7px;
     border-radius: 999px;
-    background: rgba(200,150,90,0.12);
-    color: var(--accent);
-    border: 1px solid rgba(200,150,90,0.3);
+    background: rgba(106,156,94,0.15);
+    color: #6a9c5e;
+    border: 1px solid rgba(106,156,94,0.35);
     margin-bottom: 6px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 600;
-  }
-  /* Truyenhoan badge — màu xanh lá phân biệt với moboreader (accent); đọc trong app */
-  .result-source-badge.th-badge {
-    background: rgba(106,156,94,0.15);
-    color: #6a9c5e;
-    border-color: rgba(106,156,94,0.35);
-  }
-  /* moboreader card: viền nhẹ phân biệt với truyenfull nhưng click vẫn vào in-app */
-  .result-card.result-mobo { position: relative; }
-  .result-card.result-mobo::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; bottom: 0;
-    width: 2px;
-    background: var(--accent);
-    border-radius: 12px 0 0 12px;
-    opacity: 0.5;
   }
 
   .section-title {
@@ -299,27 +282,6 @@
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     display: inline-block;
-  }
-  /* Nút mở rộng search sang moboreader — chỉ hiện khi user gõ (đã skip mobo) */
-  .search-more-btn {
-    display: block;
-    width: 100%;
-    margin: 20px auto 0;
-    max-width: 360px;
-    padding: 11px 16px;
-    background: var(--bg-elev);
-    border: 1px dashed var(--border);
-    border-radius: 10px;
-    color: var(--text-muted);
-    font-family: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .search-more-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--bg-elev-2);
   }
 
   /* Story detail */
@@ -594,6 +556,23 @@
   .toolbar button:hover { background: var(--bg-elev-2); color: var(--accent); }
   .toolbar button:disabled { opacity: 0.3; cursor: not-allowed; }
   .toolbar svg { width: 20px; height: 20px; }
+  /* TTS button — sáng accent khi đang đọc/tạm dừng */
+  .toolbar button.tts-active { background: var(--bg-elev-2); color: var(--accent); }
+  .toolbar button.tts-active::after {
+    content: '';
+    position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .toolbar button.tts-active { position: relative; }
+  /* Đoạn văn đang được đọc to — viền trái accent + nhẹ background */
+  .reader-content p.tts-highlight {
+    background: rgba(200,150,90,0.08);
+    box-shadow: inset 3px 0 0 var(--accent);
+    border-radius: 0 4px 4px 0;
+    padding-left: 12px;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
 
   /* Settings panel */
   .settings-backdrop {
@@ -1267,13 +1246,25 @@
 <script>
 // ========== CONFIG ==========
 const BASE = 'https://truyenfull.vision';
-const MOBO_BASE = 'https://www.moboreader.com';     // nguồn search phụ — read-only (mở tab ngoài)
 const TRUYENHOAN_BASE = 'https://truyenhoan.com';   // truyenfull clone — đọc full content trong app
-// Nếu app được serve từ http/https origin (chạy qua server.js), dùng /proxy?url= local.
-// Nếu mở bằng file:// thì rơi xuống các public proxy.
-const LOCAL_PROXY = (location.protocol === 'http:' || location.protocol === 'https:')
-  ? location.origin + '/proxy?url='
-  : null;
+
+// ➤ Cloudflare Worker proxy — dùng khi app host trên GitHub Pages.
+// Khi chạy localhost, server.js (cùng origin) được ưu tiên (xem PROXY_BASE bên dưới).
+const CLOUDFLARE_WORKER = 'https://sparkling-flower-9afd.kien2206.workers.dev';
+
+// PROXY_BASE = backend phục vụ /proxy. Ưu tiên:
+//   1. Localhost/LAN → server.js cùng origin (nhanh nhất, không qua CF)
+//   2. Cloudflare Worker (khi deploy GitHub Pages)
+//   3. null → fallback xuống public proxy chain
+const PROXY_BASE = (() => {
+  if (typeof location !== 'undefined' &&
+      /^(localhost|127\.|192\.168\.|10\.|0\.0\.0\.0)/.test(location.hostname)) {
+    return location.origin;
+  }
+  if (CLOUDFLARE_WORKER) return CLOUDFLARE_WORKER.replace(/\/+$/, '');
+  return null;
+})();
+const LOCAL_PROXY = PROXY_BASE ? PROXY_BASE + '/proxy?url=' : null;
 const PUBLIC_PROXIES = [
   { name: 'allorigins', build: url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url) },
   { name: 'corsproxy.io', build: url => 'https://corsproxy.io/?' + encodeURIComponent(url) },
@@ -1316,8 +1307,9 @@ function loadSettings() {
       fontFamily: 'serif',
       theme: 'dark',
       contentWidth: 720,
+      ttsRate: 1.0,
     }, s);
-  } catch { return { fontSize: 18, fontFamily: 'serif', theme: 'dark', contentWidth: 720 }; }
+  } catch { return { fontSize: 18, fontFamily: 'serif', theme: 'dark', contentWidth: 720, ttsRate: 1.0 }; }
 }
 function saveSettings() {
   localStorage.setItem('kien_ne_settings', JSON.stringify(state.settings));
@@ -1456,12 +1448,7 @@ function absoluteUrl(href) {
 // Trích slug truyện từ URL. Source-agnostic — xử lý:
 //   - truyenfull   /<slug>/...          → <slug>
 //   - truyenhoan   /<slug>.<id>/...     → <slug>  (bỏ ".<id>" hậu tố)
-//   - moboreader   /vi/bookDetail/<id>/ → mobo-<id>
 function slugFromUrl(url) {
-  if (/moboreader\.com/i.test(url)) {
-    const m = url.match(/\/bookDetail\/(\d+)\//);
-    if (m) return 'mobo-' + m[1];
-  }
   try {
     const u = new URL(url);
     // Lấy segment đầu tiên có nghĩa của path, bỏ hậu tố ".<số>" (truyenhoan).
@@ -1580,55 +1567,6 @@ function parseSearchResults(doc) {
   return items;
 }
 
-// ========== MOBOREADER (search + book-detail in-app) ==========
-// Search: parse HTML thường (block .book-box). Book detail: bóc __CD__ qua server
-// endpoint /api/mobo (vm sandbox). Chương 1 đọc được trong app — firstContent +
-// lastContent đã preload trong book detail. Chương 2+ moboreader nạp qua API
-// riêng nên openMoboChapter hiển thị link external trong reader UI.
-function parseMoboSearchResults(doc) {
-  const items = [];
-  const boxes = doc.querySelectorAll('.book-box');
-  const seen = new Set();
-  for (const box of boxes) {
-    const a = box.querySelector('a[href*="/vi/bookDetail/"]');
-    if (!a) continue;
-    const href = a.getAttribute('href') || '';
-    const idMatch = href.match(/\/bookDetail\/(\d+)\//);
-    if (!idMatch || seen.has(idMatch[1])) continue;
-    seen.add(idMatch[1]);
-    const url = href.startsWith('http') ? href : MOBO_BASE + href;
-    const titleEl = box.querySelector('h3.b-title');
-    const img = box.querySelector('img.real-image');
-    let title = titleEl ? titleEl.textContent.trim() :
-                (img ? (img.getAttribute('alt') || '').trim() : '');
-    if (!title) {
-      // Fallback: decode slug từ URL
-      try { title = decodeURIComponent(href.split('/').pop()).replace(/-/g, ' '); }
-      catch (_) { title = ''; }
-    }
-    items.push({
-      title,
-      url,
-      cover: img ? img.getAttribute('src') || '' : '',
-      slug: 'mobo-' + idMatch[1],
-      source: 'mobo',
-      // KHÔNG còn external — click giờ mở in-app qua openStory→openMoboStory
-    });
-  }
-  return items;
-}
-
-async function searchMoboreader(query) {
-  try {
-    const url = MOBO_BASE + '/vi/search?keyword=' + encodeURIComponent(query);
-    const doc = await fetchPage(url);
-    return parseMoboSearchResults(doc);
-  } catch (e) {
-    console.warn('[mobo search] bỏ qua:', e.message);
-    return [];                                       // moboreader fail không phá search chính
-  }
-}
-
 // ========== TRUYENHOAN (truyenfull clone — đọc full trong app) ==========
 // HTML structure trùng truyenfull → tái sử dụng parseSearchResults / parseStoryDetail /
 // parseChapter mà không cần parser riêng. Chỉ tag source để hiện badge phân biệt.
@@ -1642,118 +1580,6 @@ async function searchTruyenhoan(query) {
     console.warn('[truyenhoan search] bỏ qua:', e.message);
     return [];                                       // fail không phá search chính
   }
-}
-
-// Gọi endpoint /api/mobo do server.js phục vụ — server bóc __CD__.data[0] qua vm.
-// Cần LOCAL_PROXY (phải chạy qua server.js, KHÔNG mở bằng file://).
-async function fetchMoboData(url) {
-  if (!LOCAL_PROXY) throw new Error('Đọc moboreader cần server.js. Hãy mở qua http://localhost:5173/...');
-  const apiUrl = location.origin + '/api/mobo?url=' + encodeURIComponent(url);
-  const res = await fetch(apiUrl);
-  if (!res.ok) throw new Error('Server moboreader lỗi HTTP ' + res.status);
-  const j = await res.json();
-  if (j.error) throw new Error(j.error);
-  return j.data;
-}
-
-// Bóc story object từ __CD__.data[0] của moboreader (nhận từ /api/mobo).
-function moboDataToStory(d, url) {
-  const bd = d.bookDetail || {};
-  const tagList = Array.isArray(bd.tagList) ? bd.tagList : [];
-  const chapters = (d.chapterList || []).map((c) => ({
-    title: c.chapterName || ('Chương ' + c.serialNumber),
-    url: MOBO_BASE + '/vi/bookReader/' + bd.bookId + '/' + c.chapterId,
-    _moboChapter: c,                                 // giữ raw để openMoboChapter dùng
-  }));
-  return {
-    title: bd.bookName || 'Truyện moboreader',
-    cover: bd.imgUrl || '',
-    author: bd.authorName || '',
-    genres: tagList.map(t => (typeof t === 'string' ? t : (t.name || t.tagName))).filter(Boolean),
-    descHtml: (bd.introduce || '').replace(/\n/g, '<br>'),
-    status: bd.isFull ? 'Hoàn thành' : 'Đang ra',
-    chapters,
-    totalChapterPages: 1,                            // moboreader chỉ hydrate 40 chương đầu
-    url,
-    slug: 'mobo-' + (bd.bookId || ''),
-    source: 'mobo',                                  // marker — renderStoryDetail dùng để ẩn prefetch
-    _moboChapterOne: d.chapterOne || null,           // dữ liệu chương 1 (firstContent + lastContent)
-  };
-}
-
-async function openMoboStory(url) {
-  state.view = 'detail';
-  state.loading = true;
-  state.error = null;
-  state.errorKind = null;
-  state.story = null;
-  state.chapterPage = 1;
-  state.pendingStoryUrl = url;
-  render();
-  window.scrollTo(0, 0);
-  try {
-    const data = await fetchMoboData(url);
-    if (!data || !data.bookDetail) throw new Error('Không lấy được thông tin từ moboreader.');
-    state.story = moboDataToStory(data, url);
-    state.loading = false;
-    render();
-  } catch (e) {
-    state.error = e.message;
-    state.errorKind = 'network';
-    state.loading = false;
-    render();
-  }
-}
-
-// Mở chương moboreader. Chỉ chương 1 có content sẵn (firstContent + lastContent
-// đã preload trong book detail). Các chương khác yêu cầu API riêng → mở external.
-async function openMoboChapter(url, storyContext) {
-  const s = state.story && state.story.source === 'mobo' ? state.story : null;
-  const ch = s ? s.chapters.find(c => c.url === url) : null;
-  const co = s ? s._moboChapterOne : null;
-  const isFirst = ch && ch._moboChapter && ch._moboChapter.serialNumber === 1;
-
-  // Chương đầu: ráp firstContent + lastContent → đọc trong app
-  let inAppHtml = null;
-  if (isFirst && co && (co.firstContent || co.lastContent)) {
-    inAppHtml = (co.firstContent || '') + (co.lastContent || '');
-  }
-
-  state.view = 'reader';
-  state.loading = false;
-  state.error = null;
-  state.pendingChapterUrl = url;
-
-  if (inAppHtml) {
-    state.chapter = {
-      title: (co.chapterName || (ch && ch.title) || 'Chương 1'),
-      html: inAppHtml,
-      prevUrl: '', nextUrl: '',
-      url, storyUrl: s.url, storyTitle: s.title,
-      slug: s.slug, source: 'mobo', _fromCache: false,
-    };
-    setReadingState(s.slug, { chapterUrl: url, chapterTitle: state.chapter.title });
-    saveReadingProgress(s.slug, {
-      storyTitle: s.title, storyUrl: s.url, chapterUrl,
-      chapterTitle: state.chapter.title, cover: s.cover,
-    });
-  } else {
-    // Không có content tải sẵn → hiện thông báo + link external
-    state.chapter = {
-      title: (ch && ch.title) || 'Chương moboreader',
-      html: '<p><i>Chương này không thể đọc trực tiếp tại đây.</i></p>' +
-            '<p>moboreader nạp nội dung chương qua API riêng — cần headless browser ' +
-            'server-side mới đọc inline được.</p>' +
-            '<p style="margin-top:20px"><a href="' + escapeHtml(url) + '" target="_blank" ' +
-            'rel="noopener" style="color:var(--accent);font-weight:600;font-size:16px">' +
-            '↗ Đọc tại moboreader.com</a></p>',
-      prevUrl: '', nextUrl: '',
-      url, storyUrl: s ? s.url : '', storyTitle: s ? s.title : '',
-      slug: s ? s.slug : 'mobo-x', source: 'mobo', _fromCache: false,
-    };
-  }
-  render();
-  window.scrollTo(0, 0);
 }
 
 function parseStoryDetail(doc, url) {
@@ -1942,22 +1768,18 @@ function setSearchCache(query, results) {
   _searchCacheMap.set(query, { results, ts: Date.now() });
 }
 
-async function doSearch(query, opts) {
-  const includeMobo = !opts || opts.includeMobo !== false;
+async function doSearch(query) {
   const gen = ++_searchGen;
   state.view = 'search';
   state.query = query;
   state.error = null;
   state.errorKind = null;
-  state.searchIncludesMobo = includeMobo;
 
-  // CACHE HIT: render tức thì, không gọi mạng. Cache theo query + includeMobo
-  // (cùng "kiếm hiệp" nhưng gõ vs Enter cho 2 tập kết quả khác nhau).
-  const cacheKey = (includeMobo ? '+mb:' : '-mb:') + query;
-  const cached = cachedSearch(cacheKey);
+  // CACHE HIT: render tức thì, không gọi mạng
+  const cached = cachedSearch(query);
   if (cached && cached.length) {
     state.searchResults = [...cached];
-    state.searchSources = { tf: 'cached', th: 'cached', mb: includeMobo ? 'cached' : 'skipped' };
+    state.searchSources = { tf: 'cached', th: 'cached' };
     state.loading = false;
     render();
     return;
@@ -1965,18 +1787,12 @@ async function doSearch(query, opts) {
 
   state.loading = true;
   state.searchResults = [];
-  state.searchSources = {
-    tf: 'loading',
-    th: 'loading',
-    mb: includeMobo ? 'loading' : 'skipped',
-  };
+  state.searchSources = { tf: 'loading', th: 'loading' };
   render();
 
-  // Progressive render: KHÔNG đợi Promise.all — mỗi nguồn xong là render ngay.
-  // Truyenfull ~1s, truyenhoan ~1-2s, moboreader ~3-5s (251KB) — moboreader bị bỏ
-  // qua khi gõ; chỉ fire khi nhấn Enter (user chủ động yêu cầu thêm nguồn).
+  // Progressive render: mỗi nguồn xong là render ngay (truyenfull ~1s, truyenhoan ~1-2s).
   let tfErr = null;
-  let pending = includeMobo ? 3 : 2;
+  let pending = 2;
   function appendResults(items, sourceKey, status) {
     if (gen !== _searchGen) return;                  // user đã search query khác
     if (items && items.length) state.searchResults = [...state.searchResults, ...items];
@@ -1988,14 +1804,13 @@ async function doSearch(query, opts) {
         state.error = tfErr.message;
         state.errorKind = tfErr.isSiteChange ? 'site' : 'network';
       } else if (state.searchResults.length) {
-        // Lưu cache cho lần search lại trong 5 phút tới (key gồm cờ includeMobo)
-        setSearchCache(cacheKey, state.searchResults);
+        setSearchCache(query, state.searchResults);
       }
     }
     render();
   }
 
-  // Bắn các nguồn song song, không await ở scope ngoài
+  // Bắn 2 nguồn song song, không await ở scope ngoài
   (async () => {
     try {
       const doc = await fetchPage(`${BASE}/tim-kiem/?tukhoa=${encodeURIComponent(query)}`);
@@ -2006,16 +1821,9 @@ async function doSearch(query, opts) {
     const r = await searchTruyenhoan(query);
     appendResults(r, 'th', r.length ? 'done' : 'fail');
   })();
-  if (includeMobo) {
-    (async () => {
-      const r = await searchMoboreader(query);
-      appendResults(r, 'mb', r.length ? 'done' : 'fail');
-    })();
-  }
 }
 
 async function openStory(url) {
-  if (url && /moboreader\.com/i.test(url)) return openMoboStory(url);
   state.view = 'detail';
   state.loading = true;
   state.error = null;
@@ -2086,7 +1894,7 @@ async function loadMoreChaptersInBackground(story, url) {
 }
 
 async function openChapter(url, storyContext) {
-  if (url && /moboreader\.com/i.test(url)) return openMoboChapter(url, storyContext);
+  _tts.stop();                  // chương cũ → dừng đọc to (DOM sắp bị thay)
   state.view = 'reader';
   state.loading = true;
   state.error = null;
@@ -2140,6 +1948,7 @@ async function openChapter(url, storyContext) {
 }
 
 function goHome() {
+  _tts.stop();
   state.view = 'home';
   state.query = '';
   state.searchResults = [];
@@ -2149,6 +1958,7 @@ function goHome() {
 }
 
 function backToStory() {
+  _tts.stop();
   if (state.story) {
     state.view = 'detail';
     state.error = null;
@@ -2170,7 +1980,193 @@ const icon = {
   settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
   list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
   book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>',
 };
+
+// ========== TEXT-TO-SPEECH (Web Speech API) ==========
+// Đọc to nội dung chương qua giọng tích hợp trình duyệt. Miễn phí, không cần key.
+// Trạng thái: 'idle' → click play → 'playing' → click → 'paused' → click → 'playing' …
+// Auto stop khi rời reader (chuyển chương / quay lại trang chi tiết / về home).
+// Chrome bug-workaround: voices nạp bất đồng bộ — getVoices() trả [] lần đầu.
+// Đợi voiceschanged hoặc timeout 1500ms rồi tiếp.
+function _ttsGetVoicesAsync() {
+  return new Promise((resolve) => {
+    const synth = window.speechSynthesis;
+    let v = synth.getVoices() || [];
+    if (v.length) return resolve(v);
+    const done = () => { resolve(synth.getVoices() || []); };
+    if ('onvoiceschanged' in synth) {
+      const h = () => { synth.removeEventListener('voiceschanged', h); done(); };
+      synth.addEventListener('voiceschanged', h);
+    }
+    setTimeout(done, 1500);                              // fallback nếu sự kiện không bao giờ fire
+  });
+}
+
+const _tts = {
+  state: 'idle',
+  chunks: [],
+  idx: 0,
+  voice: null,                 // chọn 1 lần ở start(), tái dùng — tránh getVoices() lặp
+  _keepAliveTimer: null,       // Chrome bug: synth tự pause sau ~15s → ping định kỳ
+
+  // Chia .reader-content thành mảng { text, el } để highlight + scroll-follow.
+  // Truyenfull/truyenhoan đôi khi dùng <br> thay vì <p> → fallback dùng innerText.
+  _buildChunks() {
+    const root = document.querySelector('.reader-content');
+    if (!root) return [];
+    const out = [];
+
+    // 1) Ưu tiên <p> — có element để highlight + scroll
+    for (const p of root.querySelectorAll('p')) {
+      const t = (p.textContent || '').trim();
+      if (t) out.push({ text: t, el: p });
+    }
+    if (out.length) return out;
+
+    // 2) Fallback: chương dùng <br>. innerText respects <br> → có '\n'. Split theo dòng.
+    //    el = root → không highlight được từng đoạn, nhưng vẫn đọc to được.
+    const text = (root.innerText || root.textContent || '').trim();
+    if (!text) return [];
+    const lines = text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 1);
+    return lines.map(t => ({ text: t, el: root }));
+  },
+
+  // Chrome cancel-then-speak race: gọi cancel() rồi speak() ngay → silent fail.
+  // Giải pháp: tách bằng setTimeout 50ms.
+  _resetSynth() {
+    try { window.speechSynthesis.cancel(); } catch (_) {}
+  },
+
+  _keepAliveStart() {
+    clearInterval(this._keepAliveTimer);
+    // Chrome dừng synth nếu utterance > ~15s mà không có event. Ping bằng pause+resume.
+    this._keepAliveTimer = setInterval(() => {
+      if (this.state !== 'playing') return;
+      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        try { window.speechSynthesis.pause(); window.speechSynthesis.resume(); } catch (_) {}
+      }
+    }, 10000);
+  },
+  _keepAliveStop() {
+    clearInterval(this._keepAliveTimer);
+    this._keepAliveTimer = null;
+  },
+
+  _speakIdx() {
+    if (this.state !== 'playing') return;
+    if (this.idx >= this.chunks.length) { this.stop(); return; }
+    const ch = this.chunks[this.idx];
+    const u = new SpeechSynthesisUtterance(ch.text);
+    u.lang = 'vi-VN';
+    u.rate = (state.settings && state.settings.ttsRate) || 1.0;
+    // CHỈ set voice nếu thực sự tìm được giọng vi — không set bừa null (Safari fail im).
+    // Không có voice vi → để default browser pick theo lang.
+    if (this.voice) u.voice = this.voice;
+
+    // Chỉ highlight + scroll nếu element là <p> (có ranh giới đoạn rõ).
+    // Khi fallback dùng <br>, el = .reader-content → bỏ qua, vẫn đọc bình thường.
+    const canHighlight = ch.el && ch.el.tagName === 'P';
+    u.onend = () => {
+      if (this.state !== 'playing') return;
+      if (canHighlight) ch.el.classList.remove('tts-highlight');
+      this.idx++;
+      this._speakIdx();
+    };
+    u.onerror = (e) => {
+      console.warn('[tts] utterance error:', e && (e.error || e.message), '— bỏ qua đoạn này');
+      if (canHighlight) ch.el.classList.remove('tts-highlight');
+      if (this.state === 'playing') { this.idx++; this._speakIdx(); }
+    };
+    if (canHighlight) {
+      ch.el.classList.add('tts-highlight');
+      const r = ch.el.getBoundingClientRect();
+      if (r.top < 80 || r.bottom > window.innerHeight - 80) {
+        ch.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+    try { window.speechSynthesis.speak(u); }
+    catch (e) { console.error('[tts] speak() throw:', e); this.stop(); }
+  },
+
+  async start() {
+    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+      alert('Trình duyệt không hỗ trợ đọc to (Web Speech API).');
+      return;
+    }
+    if (this.state === 'paused') { this.resume(); return; }
+
+    // Dọn synth trước — Chrome cần delay giữa cancel() và speak() mới
+    this._resetSynth();
+    this.chunks = this._buildChunks();
+    if (!this.chunks.length) { alert('Không có đoạn văn để đọc.'); return; }
+
+    // Nạp voices (lần đầu Chrome cần đợi async)
+    const voices = await _ttsGetVoicesAsync();
+    this.voice =
+      voices.find(v => /^vi[-_]/i.test(v.lang)) ||
+      voices.find(v => /Vietnam/i.test(v.name)) ||
+      null;
+    console.log('[tts] có', voices.length, 'giọng;', this.voice ? 'dùng giọng VI: ' + this.voice.name : 'không có giọng VI, dùng giọng mặc định (phát âm có thể sai)');
+
+    this.idx = 0;
+    this.state = 'playing';
+    this._keepAliveStart();
+    this._renderBtn();
+    // Chrome cancel-then-speak race → tách bằng setTimeout
+    setTimeout(() => this._speakIdx(), 60);
+  },
+
+  pause() {
+    if (this.state !== 'playing') return;
+    window.speechSynthesis.pause();
+    this.state = 'paused';
+    this._renderBtn();
+  },
+
+  resume() {
+    if (this.state !== 'paused') return;
+    window.speechSynthesis.resume();
+    this.state = 'playing';
+    this._renderBtn();
+  },
+
+  stop() {
+    this._keepAliveStop();
+    try { window.speechSynthesis.cancel(); } catch (_) {}
+    document.querySelectorAll('.tts-highlight').forEach(el => el.classList.remove('tts-highlight'));
+    this.state = 'idle';
+    this.chunks = [];
+    this.idx = 0;
+    this._renderBtn();
+  },
+
+  toggle() {
+    if (this.state === 'idle') this.start();
+    else if (this.state === 'playing') this.pause();
+    else this.resume();
+  },
+
+  _renderBtn() {
+    const btn = document.getElementById('tts-btn');
+    if (!btn) return;
+    if (this.state === 'playing') {
+      btn.innerHTML = icon.pause;
+      btn.classList.add('tts-active');
+      btn.setAttribute('title', 'Tạm dừng đọc');
+    } else if (this.state === 'paused') {
+      btn.innerHTML = icon.play;
+      btn.classList.add('tts-active');
+      btn.setAttribute('title', 'Tiếp tục đọc');
+    } else {
+      btn.innerHTML = icon.play;
+      btn.classList.remove('tts-active');
+      btn.setAttribute('title', 'Đọc to');
+    }
+  },
+};
+function toggleTts() { _tts.toggle(); }
 
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({
@@ -2286,15 +2282,9 @@ function renderSearch() {
   if (state.loading && !state.searchResults.length) return renderSearchSkeleton();
   if (state.error) return renderError(state.error, () => doSearch(state.query));
   if (!state.searchResults.length) {
-    const moboUrl = 'https://www.moboreader.com/vi/search?keyword=' + encodeURIComponent(state.query);
     return `
       <div class="empty-state">
         <div>Không tìm thấy kết quả cho "<b>${escapeHtml(state.query)}</b>"</div>
-        <p style="margin-top:14px;font-size:13px;color:var(--text-dim)">
-          Thử tìm ở nguồn khác:
-          <a href="${moboUrl}" target="_blank" rel="noopener noreferrer"
-             style="color:var(--accent);text-decoration:underline;margin-left:4px">moboreader.com ↗</a>
-        </p>
       </div>
     `;
   }
@@ -2303,38 +2293,24 @@ function renderSearch() {
   const loadingSources = [];
   if (ss.tf === 'loading') loadingSources.push('truyenfull');
   if (ss.th === 'loading') loadingSources.push('truyenhoan');
-  if (ss.mb === 'loading') loadingSources.push('moboreader');
   const loadingHint = loadingSources.length
     ? `<span class="search-loading-hint"><span class="search-spinner"></span> Đang tải thêm từ ${loadingSources.join(', ')}…</span>`
-    : '';
-
-  // Nếu user gõ search (KHÔNG bao gồm mobo) → cho phép mở rộng sang mobo bằng 1 click.
-  // Tránh chậm-mặc-định: chỉ chạy mobo khi user chủ động yêu cầu.
-  const moboHint = (ss.mb === 'skipped' && !state.loading)
-    ? `<button class="search-more-btn" onclick='doSearch(${jsAttr(state.query)}, {includeMobo:true})'>
-         + Tìm thêm ở moboreader (chậm hơn — ~3-5s)
-       </button>`
     : '';
 
   return `
     <h2 class="section-title">Kết quả cho "${escapeHtml(state.query)}" ${loadingHint}</h2>
     <div class="results-grid">
-      ${state.searchResults.map(r => {
-        // openStory tự route: URL moboreader → openMoboStory (in-app), URL truyenfull → flow gốc.
-        return `
-        <div class="result-card${r.source === 'mobo' ? ' result-mobo' : ''}" onclick='openStory(${jsAttr(r.url)})'>
+      ${state.searchResults.map(r => `
+        <div class="result-card" onclick='openStory(${jsAttr(r.url)})'>
           <img src="${escapeHtml(r.cover) || 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 70 100%22><rect width=%2270%22 height=%22100%22 fill=%22%2325221d%22/></svg>'}" alt="" loading="lazy" onerror="this.style.opacity=0.3">
           <div class="result-info">
-            ${r.source === 'mobo' ? '<span class="result-source-badge">moboreader ↗</span>' :
-              r.source === 'truyenhoan' ? '<span class="result-source-badge th-badge">truyenhoan</span>' : ''}
+            ${r.source === 'truyenhoan' ? '<span class="result-source-badge">truyenhoan</span>' : ''}
             <div class="result-title">${escapeHtml(r.title)}</div>
             ${r.author ? `<div class="result-meta">${escapeHtml(r.author)}</div>` : ''}
             ${r.latest ? `<div class="result-genre">${escapeHtml(r.latest)}</div>` : ''}
           </div>
-        </div>`;
-      }).join('')}
+        </div>`).join('')}
     </div>
-    ${moboHint}
   `;
 }
 
@@ -2381,7 +2357,7 @@ function renderStoryDetail() {
     <div class="chapters-header">
       <h2 class="section-title" style="margin:0">Danh sách chương</h2>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        ${s.chapters.length && s.source !== 'mobo' ? `<button id="prefetch-btn" class="prefetch-btn" onclick="prefetchFromDetail()" title="Tải trước ${PREFETCH_COUNT} chương vào máy để đọc khi mất mạng">⤓ Tải trước ${PREFETCH_COUNT} chương</button>` : ''}
+        ${s.chapters.length ? `<button id="prefetch-btn" class="prefetch-btn" onclick="prefetchFromDetail()" title="Tải trước ${PREFETCH_COUNT} chương vào máy để đọc khi mất mạng">⤓ Tải trước ${PREFETCH_COUNT} chương</button>` : ''}
         ${s.chapters.length ? `<form class="chapter-jump" onsubmit="event.preventDefault(); jumpToChapter(this.n.value)" title="Nhập số chương rồi Enter để đọc ngay">
           <span>Đến #</span>
           <input type="number" name="n" min="1" max="${totalChapters}" placeholder="${totalChapters}" inputmode="numeric" autocomplete="off">
@@ -2469,6 +2445,7 @@ function renderReader() {
       <div class="toolbar">
         <button onclick='openChapter(${jsAttr(c.prevUrl)})' ${!c.prevUrl ? 'disabled' : ''} title="Chương trước">${icon.prev}</button>
         <button onclick="openChapterPicker()" title="Chọn chương">${icon.list}</button>
+        <button id="tts-btn" onclick="toggleTts()" title="Đọc to">${icon.play}</button>
         <button onclick="toggleSettings()" title="Cài đặt">${icon.settings}</button>
         <button onclick='openChapter(${jsAttr(c.nextUrl)})' ${!c.nextUrl ? 'disabled' : ''} title="Chương sau">${icon.next}</button>
       </div>
@@ -2529,6 +2506,12 @@ function renderSettingsPanel() {
           <button class="theme-swatch ${s.theme === 'sepia' ? 'active' : ''}" style="background:#fdf6e3;color:#3a2d1f" onclick="updateSetting('theme', 'sepia')"><span>Sepia</span></button>
           <button class="theme-swatch ${s.theme === 'light' ? 'active' : ''}" style="background:#ffffff;color:#1a1815" onclick="updateSetting('theme', 'light')"><span>Sáng</span></button>
         </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-label"><span>Tốc độ đọc to</span><span>${(s.ttsRate || 1).toFixed(2)}×</span></div>
+        <input type="range" min="0.7" max="1.8" step="0.05" value="${s.ttsRate || 1}"
+               oninput="updateSetting('ttsRate', +this.value)">
       </div>
     </div>
   `;
@@ -2687,13 +2670,10 @@ function filterChapterPicker(q) {
 }
 
 // ========== ROUTING / HANDLERS ==========
-// fromSubmit=true (nhấn Enter) → search tất cả 3 nguồn.
-// fromSubmit=false (gõ debounced) → bỏ qua moboreader cho nhanh; user nhấn Enter
-// để mở rộng tìm sang moboreader.
-function handleSearch(q, opts) {
+function handleSearch(q) {
   q = (q || '').trim();
   if (!q) return;
-  doSearch(q, opts || { includeMobo: true });
+  doSearch(q);
 }
 
 function handleBack() {
@@ -2990,9 +2970,6 @@ function chapterUrlsAfter(currentUrl, count) {
 // Luôn giữ sẵn PREFETCH_COUNT chương phía trước. Đọc tiến 1 chương → cửa sổ trượt theo
 // và chỉ tải đúng phần mới (thường là 1 chương) lọt vào cuối cửa sổ.
 function schedulePrefetchAfter(currentUrl) {
-  // Moboreader chương cần API riêng → fetchPage(chapter URL) sẽ fail/parser ném →
-  // prefetch chỉ gây noise. Bỏ qua.
-  if (state.story && state.story.source === 'mobo') return;
   setTimeout(() => {
     const list = state.story && state.story.chapters;
 
@@ -3170,8 +3147,7 @@ function handleSearchInput(q) {
   clearTimeout(_searchTimer);
   q = (q || '').trim();
   if (!q || q.length < 2) return;
-  // 300ms debounce + KHÔNG include mobo khi typing (251KB chậm); user Enter để có mobo.
-  _searchTimer = setTimeout(() => handleSearch(q, { includeMobo: false }), 300);
+  _searchTimer = setTimeout(() => handleSearch(q), 300);
 }
 
 // ========== UX helpers (description toggle) ==========
@@ -3264,7 +3240,7 @@ document.addEventListener('touchend', (e) => {
   };
 })();
 
-// ========== MAIN RENDER ========== 
+// ========== MAIN RENDER ==========
 function render() {
   document.getElementById('header').innerHTML = renderHeader();
   const main = document.getElementById('main');
