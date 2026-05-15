@@ -241,6 +241,37 @@
     color: var(--accent);
     margin-top: auto;
   }
+  /* Card từ nguồn ngoài (moboreader) — mở tab mới khi click */
+  .result-source-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(200,150,90,0.12);
+    color: var(--accent);
+    border: 1px solid rgba(200,150,90,0.3);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  /* Truyenhoan badge — màu xanh lá phân biệt với moboreader (accent); đọc trong app */
+  .result-source-badge.th-badge {
+    background: rgba(106,156,94,0.15);
+    color: #6a9c5e;
+    border-color: rgba(106,156,94,0.35);
+  }
+  /* moboreader card: viền nhẹ phân biệt với truyenfull nhưng click vẫn vào in-app */
+  .result-card.result-mobo { position: relative; }
+  .result-card.result-mobo::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    border-radius: 12px 0 0 12px;
+    opacity: 0.5;
+  }
 
   .section-title {
     font-family: 'Crimson Pro', serif;
@@ -346,6 +377,38 @@
   .prefetch-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--bg-elev-2); }
   .prefetch-btn:disabled { cursor: default; opacity: 0.85; }
   .prefetch-btn.done { color: #6a9c5e; border-color: rgba(106,156,94,0.4); }
+  /* Form nhảy nhanh tới chương số N */
+  .chapter-jump {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .chapter-jump input {
+    width: 70px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    -moz-appearance: textfield;
+  }
+  .chapter-jump input::-webkit-outer-spin-button,
+  .chapter-jump input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .chapter-jump input:focus { border-color: var(--accent); }
+  .chapter-jump button {
+    background: var(--accent);
+    color: #1a1208;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    transition: filter 0.12s;
+  }
+  .chapter-jump button:hover { filter: brightness(1.08); }
   .chapters-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -595,6 +658,134 @@
     accent-color: var(--accent);
   }
 
+  /* ============ CHAPTER PICKER (overlay chọn chương trong reader) ============ */
+  .picker-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 200;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .picker-backdrop.open { opacity: 1; pointer-events: auto; }
+  .picker-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    z-index: 201;
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .picker-panel.open { transform: translateY(0); }
+  @media (min-width: 640px) {
+    .picker-panel {
+      max-width: 560px;
+      left: 50%;
+      bottom: 5vh;
+      transform: translate(-50%, calc(100% + 5vh));
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      max-height: 80vh;
+    }
+    .picker-panel.open { transform: translate(-50%, 0); }
+  }
+  .picker-header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px 8px;
+    flex-shrink: 0;
+  }
+  .picker-title {
+    font-family: 'Crimson Pro', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .picker-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .picker-search {
+    display: flex; align-items: center; gap: 8px;
+    margin: 0 18px 10px;
+    padding: 0 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+  }
+  .picker-search:focus-within { border-color: var(--accent); }
+  .picker-search svg { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+  .picker-search input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 14px;
+    padding: 10px 0;
+  }
+  .picker-search input::placeholder { color: var(--text-dim); }
+  .picker-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .picker-list::-webkit-scrollbar { width: 6px; }
+  .picker-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .picker-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1.4;
+    transition: background 0.12s, color 0.12s, transform 0.08s;
+    text-decoration: none;
+  }
+  .picker-item:hover { background: var(--bg-elev-2); color: var(--text); }
+  .picker-item:active { transform: scale(0.98); }
+  .picker-item.read { color: var(--text-dim); }
+  .picker-item.current { background: var(--bg-elev-2); color: var(--accent); }
+  .picker-num {
+    flex-shrink: 0;
+    min-width: 42px;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: right;
+  }
+  .picker-item.current .picker-num { color: var(--accent); font-weight: 600; }
+  .picker-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .picker-empty {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 30px 16px;
+  }
+  @media (max-width: 640px) {
+    .picker-panel { max-height: 88vh; padding-bottom: env(safe-area-inset-bottom); border-radius: 20px 20px 0 0; }
+    .picker-item { min-height: 44px; padding: 12px 14px; }
+  }
+
   /* Loading + Error */
   .loader {
     display: flex;
@@ -771,6 +962,8 @@
 
     /* Chapter list — 1 col, 44px min height */
     .chapters-header { margin-bottom: 10px; }
+    .chapter-jump input { width: 64px; padding: 8px 10px; font-size: 14px; min-height: 38px; }
+    .chapter-jump button { padding: 8px 14px; min-height: 38px; }
     .chapters-list {
       grid-template-columns: 1fr;
       gap: 1px;
@@ -1033,6 +1226,8 @@
 <script>
 // ========== CONFIG ==========
 const BASE = 'https://truyenfull.vision';
+const MOBO_BASE = 'https://www.moboreader.com';     // nguồn search phụ — read-only (mở tab ngoài)
+const TRUYENHOAN_BASE = 'https://truyenhoan.com';   // truyenfull clone — đọc full content trong app
 // Nếu app được serve từ http/https origin (chạy qua server.js), dùng /proxy?url= local.
 // Nếu mở bằng file:// thì rơi xuống các public proxy.
 const LOCAL_PROXY = (location.protocol === 'http:' || location.protocol === 'https:')
@@ -1043,6 +1238,15 @@ const PUBLIC_PROXIES = [
   { name: 'corsproxy.io', build: url => 'https://corsproxy.io/?' + encodeURIComponent(url) },
   { name: 'codetabs', build: url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url) },
   { name: 'thingproxy', build: url => 'https://thingproxy.freeboard.io/fetch/' + url },
+];
+// Các tên miền mirror của truyenfull (cùng IP, cùng kho truyện, cùng HTML).
+// Khi domain chính fail toàn bộ proxy chain → fetchPage thử lần lượt các mirror này.
+// Hiện tại chỉ truyenfull.vision sống ổn định; còn lại để sẵn cho khi server bật trở lại.
+const MIRROR_HOSTS = [
+  'truyenfull.io',
+  'truyenfull.vn',
+  'truyenfull.so',
+  'truyenfull.world',
 ];
 const PAGE_SIZE = 60; // chapters per page in list
 
@@ -1135,36 +1339,51 @@ async function tryFetch(proxyUrl, label) {
   }
 }
 
-async function fetchPage(url) {
-  const errors = [];
+// Đổi hostname trong URL sang `newHost`, giữ nguyên path/query. Trả '' nếu URL hỏng.
+function swapHost(url, newHost) {
+  try { const u = new URL(url); u.hostname = newHost; return u.toString(); }
+  catch (_) { return ''; }
+}
 
-  // 1) Ưu tiên local proxy (server.js) — không cần internet proxy ngoài
+// Thử URL với toàn bộ chuỗi proxy (local + public). Throw nếu tất cả fail.
+async function _fetchPageOnce(url) {
+  const errors = [];
   if (LOCAL_PROXY) {
     try {
       const html = await tryFetch(LOCAL_PROXY + encodeURIComponent(url), 'local');
       return new DOMParser().parseFromString(html, 'text/html');
-    } catch (e) {
-      errors.push('local: ' + e.message);
-      console.warn('Local proxy fail:', e.message);
-    }
+    } catch (e) { errors.push('local: ' + e.message); console.warn('Local proxy fail:', e.message); }
   }
-
-  // 2) Public proxies (chỉ chạy nếu mở file:// hoặc local proxy fail)
   for (const p of PUBLIC_PROXIES) {
     try {
       const html = await tryFetch(p.build(url), p.name);
       return new DOMParser().parseFromString(html, 'text/html');
-    } catch (e) {
-      errors.push(p.name + ': ' + e.message);
-      console.warn(p.name + ' fail:', e.message);
-    }
+    } catch (e) { errors.push(p.name + ': ' + e.message); console.warn(p.name + ' fail:', e.message); }
   }
-
   throw new Error(
     LOCAL_PROXY
-      ? 'Không thể tải từ truyenfull.vision qua local proxy. Kiểm tra server.js đang chạy và mạng còn hoạt động.\n(' + errors.join(' | ') + ')'
+      ? 'Không thể tải qua local proxy. Kiểm tra server.js đang chạy và mạng còn hoạt động.\n(' + errors.join(' | ') + ')'
       : 'Tất cả proxy đều thất bại. Hãy chạy server.js (node server.js) rồi mở http://localhost:5173/kien-ne.html để dùng local proxy.\n(' + errors.join(' | ') + ')'
   );
+}
+
+async function fetchPage(url) {
+  try {
+    return await _fetchPageOnce(url);
+  } catch (firstErr) {
+    // Mirror fallback: domain chính chết toàn diện → thử lần lượt từng mirror.
+    // Vì các mirror cùng host structure, chỉ cần đổi hostname.
+    for (const host of MIRROR_HOSTS) {
+      const alt = swapHost(url, host);
+      if (!alt || alt === url) continue;
+      try {
+        const doc = await _fetchPageOnce(alt);
+        console.warn('[fetchPage] mirror "' + host + '" thay cho ' + url);
+        return doc;
+      } catch (_) { /* mirror cũng chết, thử mirror kế */ }
+    }
+    throw firstErr;
+  }
 }
 
 // ========== HELPERS ==========
@@ -1193,9 +1412,25 @@ function absoluteUrl(href) {
   return BASE + '/' + href;
 }
 
+// Trích slug truyện từ URL. Source-agnostic — xử lý:
+//   - truyenfull   /<slug>/...          → <slug>
+//   - truyenhoan   /<slug>.<id>/...     → <slug>  (bỏ ".<id>" hậu tố)
+//   - moboreader   /vi/bookDetail/<id>/ → mobo-<id>
 function slugFromUrl(url) {
-  const m = url.match(/truyenfull\.vision\/([^\/]+)/);
-  return m ? m[1] : url;
+  if (/moboreader\.com/i.test(url)) {
+    const m = url.match(/\/bookDetail\/(\d+)\//);
+    if (m) return 'mobo-' + m[1];
+  }
+  try {
+    const u = new URL(url);
+    // Lấy segment đầu tiên có nghĩa của path, bỏ hậu tố ".<số>" (truyenhoan).
+    const seg = (u.pathname.split('/').filter(Boolean)[0] || '').replace(/\.\d+$/, '');
+    return seg || url;
+  } catch (_) {
+    // Fallback an toàn cho input không phải URL chuẩn
+    const m = url.match(/\/([^\/]+)/);
+    return m ? m[1] : url;
+  }
 }
 
 // Bảo đảm URL truyện có dấu "/" ở cuối (cần cho việc ghép `trang-N/`)
@@ -1304,6 +1539,182 @@ function parseSearchResults(doc) {
   return items;
 }
 
+// ========== MOBOREADER (search + book-detail in-app) ==========
+// Search: parse HTML thường (block .book-box). Book detail: bóc __CD__ qua server
+// endpoint /api/mobo (vm sandbox). Chương 1 đọc được trong app — firstContent +
+// lastContent đã preload trong book detail. Chương 2+ moboreader nạp qua API
+// riêng nên openMoboChapter hiển thị link external trong reader UI.
+function parseMoboSearchResults(doc) {
+  const items = [];
+  const boxes = doc.querySelectorAll('.book-box');
+  const seen = new Set();
+  for (const box of boxes) {
+    const a = box.querySelector('a[href*="/vi/bookDetail/"]');
+    if (!a) continue;
+    const href = a.getAttribute('href') || '';
+    const idMatch = href.match(/\/bookDetail\/(\d+)\//);
+    if (!idMatch || seen.has(idMatch[1])) continue;
+    seen.add(idMatch[1]);
+    const url = href.startsWith('http') ? href : MOBO_BASE + href;
+    const titleEl = box.querySelector('h3.b-title');
+    const img = box.querySelector('img.real-image');
+    let title = titleEl ? titleEl.textContent.trim() :
+                (img ? (img.getAttribute('alt') || '').trim() : '');
+    if (!title) {
+      // Fallback: decode slug từ URL
+      try { title = decodeURIComponent(href.split('/').pop()).replace(/-/g, ' '); }
+      catch (_) { title = ''; }
+    }
+    items.push({
+      title,
+      url,
+      cover: img ? img.getAttribute('src') || '' : '',
+      slug: 'mobo-' + idMatch[1],
+      source: 'mobo',
+      // KHÔNG còn external — click giờ mở in-app qua openStory→openMoboStory
+    });
+  }
+  return items;
+}
+
+async function searchMoboreader(query) {
+  try {
+    const url = MOBO_BASE + '/vi/search?keyword=' + encodeURIComponent(query);
+    const doc = await fetchPage(url);
+    return parseMoboSearchResults(doc);
+  } catch (e) {
+    console.warn('[mobo search] bỏ qua:', e.message);
+    return [];                                       // moboreader fail không phá search chính
+  }
+}
+
+// ========== TRUYENHOAN (truyenfull clone — đọc full trong app) ==========
+// HTML structure trùng truyenfull → tái sử dụng parseSearchResults / parseStoryDetail /
+// parseChapter mà không cần parser riêng. Chỉ tag source để hiện badge phân biệt.
+async function searchTruyenhoan(query) {
+  try {
+    const url = TRUYENHOAN_BASE + '/tim-kiem/?tukhoa=' + encodeURIComponent(query);
+    const doc = await fetchPage(url);
+    const items = parseSearchResults(doc);
+    return items.map(it => ({ ...it, source: 'truyenhoan' }));
+  } catch (e) {
+    console.warn('[truyenhoan search] bỏ qua:', e.message);
+    return [];                                       // fail không phá search chính
+  }
+}
+
+// Gọi endpoint /api/mobo do server.js phục vụ — server bóc __CD__.data[0] qua vm.
+// Cần LOCAL_PROXY (phải chạy qua server.js, KHÔNG mở bằng file://).
+async function fetchMoboData(url) {
+  if (!LOCAL_PROXY) throw new Error('Đọc moboreader cần server.js. Hãy mở qua http://localhost:5173/...');
+  const apiUrl = location.origin + '/api/mobo?url=' + encodeURIComponent(url);
+  const res = await fetch(apiUrl);
+  if (!res.ok) throw new Error('Server moboreader lỗi HTTP ' + res.status);
+  const j = await res.json();
+  if (j.error) throw new Error(j.error);
+  return j.data;
+}
+
+// Bóc story object từ __CD__.data[0] của moboreader (nhận từ /api/mobo).
+function moboDataToStory(d, url) {
+  const bd = d.bookDetail || {};
+  const tagList = Array.isArray(bd.tagList) ? bd.tagList : [];
+  const chapters = (d.chapterList || []).map((c) => ({
+    title: c.chapterName || ('Chương ' + c.serialNumber),
+    url: MOBO_BASE + '/vi/bookReader/' + bd.bookId + '/' + c.chapterId,
+    _moboChapter: c,                                 // giữ raw để openMoboChapter dùng
+  }));
+  return {
+    title: bd.bookName || 'Truyện moboreader',
+    cover: bd.imgUrl || '',
+    author: bd.authorName || '',
+    genres: tagList.map(t => (typeof t === 'string' ? t : (t.name || t.tagName))).filter(Boolean),
+    descHtml: (bd.introduce || '').replace(/\n/g, '<br>'),
+    status: bd.isFull ? 'Hoàn thành' : 'Đang ra',
+    chapters,
+    totalChapterPages: 1,                            // moboreader chỉ hydrate 40 chương đầu
+    url,
+    slug: 'mobo-' + (bd.bookId || ''),
+    source: 'mobo',                                  // marker — renderStoryDetail dùng để ẩn prefetch
+    _moboChapterOne: d.chapterOne || null,           // dữ liệu chương 1 (firstContent + lastContent)
+  };
+}
+
+async function openMoboStory(url) {
+  state.view = 'detail';
+  state.loading = true;
+  state.error = null;
+  state.errorKind = null;
+  state.story = null;
+  state.chapterPage = 1;
+  state.pendingStoryUrl = url;
+  render();
+  window.scrollTo(0, 0);
+  try {
+    const data = await fetchMoboData(url);
+    if (!data || !data.bookDetail) throw new Error('Không lấy được thông tin từ moboreader.');
+    state.story = moboDataToStory(data, url);
+    state.loading = false;
+    render();
+  } catch (e) {
+    state.error = e.message;
+    state.errorKind = 'network';
+    state.loading = false;
+    render();
+  }
+}
+
+// Mở chương moboreader. Chỉ chương 1 có content sẵn (firstContent + lastContent
+// đã preload trong book detail). Các chương khác yêu cầu API riêng → mở external.
+async function openMoboChapter(url, storyContext) {
+  const s = state.story && state.story.source === 'mobo' ? state.story : null;
+  const ch = s ? s.chapters.find(c => c.url === url) : null;
+  const co = s ? s._moboChapterOne : null;
+  const isFirst = ch && ch._moboChapter && ch._moboChapter.serialNumber === 1;
+
+  // Chương đầu: ráp firstContent + lastContent → đọc trong app
+  let inAppHtml = null;
+  if (isFirst && co && (co.firstContent || co.lastContent)) {
+    inAppHtml = (co.firstContent || '') + (co.lastContent || '');
+  }
+
+  state.view = 'reader';
+  state.loading = false;
+  state.error = null;
+  state.pendingChapterUrl = url;
+
+  if (inAppHtml) {
+    state.chapter = {
+      title: (co.chapterName || (ch && ch.title) || 'Chương 1'),
+      html: inAppHtml,
+      prevUrl: '', nextUrl: '',
+      url, storyUrl: s.url, storyTitle: s.title,
+      slug: s.slug, source: 'mobo', _fromCache: false,
+    };
+    setReadingState(s.slug, { chapterUrl: url, chapterTitle: state.chapter.title });
+    saveReadingProgress(s.slug, {
+      storyTitle: s.title, storyUrl: s.url, chapterUrl,
+      chapterTitle: state.chapter.title, cover: s.cover,
+    });
+  } else {
+    // Không có content tải sẵn → hiện thông báo + link external
+    state.chapter = {
+      title: (ch && ch.title) || 'Chương moboreader',
+      html: '<p><i>Chương này không thể đọc trực tiếp tại đây.</i></p>' +
+            '<p>moboreader nạp nội dung chương qua API riêng — cần headless browser ' +
+            'server-side mới đọc inline được.</p>' +
+            '<p style="margin-top:20px"><a href="' + escapeHtml(url) + '" target="_blank" ' +
+            'rel="noopener" style="color:var(--accent);font-weight:600;font-size:16px">' +
+            '↗ Đọc tại moboreader.com</a></p>',
+      prevUrl: '', nextUrl: '',
+      url, storyUrl: s ? s.url : '', storyTitle: s ? s.title : '',
+      slug: s ? s.slug : 'mobo-x', source: 'mobo', _fromCache: false,
+    };
+  }
+  render();
+  window.scrollTo(0, 0);
+}
+
 function parseStoryDetail(doc, url) {
   assertStructure(looksLikeTruyenfullDoc(doc), 'detail',
     'không nhận ra trang truyenfull trong nội dung trả về.');
@@ -1348,8 +1759,19 @@ function parseStoryDetail(doc, url) {
   // Mốc bắt buộc: tên truyện và danh sách chương. Thiếu một trong hai nghĩa là
   // selector tương ứng đã không còn khớp với HTML của truyenfull.
   assertStructure(title, 'detail', 'không đọc được tên truyện (h3.title / [itemprop="name"]).');
-  assertStructure(chapters.length, 'detail',
-    'đọc được tên truyện nhưng danh sách chương trống (#list-chapter ...).');
+  if (!chapters.length) {
+    // Thêm chẩn đoán cụ thể vào thông báo: URL + tình trạng #list-chapter.
+    // Giúp dán lại lỗi cho người sửa parser biết ngay là (a) truyện chưa có chương,
+    // (b) selector sai, hay (c) trang nguồn đã đổi cấu trúc thật.
+    const lc = doc.getElementById('list-chapter');
+    const liCount = lc ? lc.querySelectorAll('li a').length : 0;
+    const ulCount = lc ? lc.querySelectorAll('ul.list-chapter').length : 0;
+    assertStructure(false, 'detail',
+      'truyện "' + title + '" — danh sách chương trống. ' +
+      'URL: ' + url + ' | #list-chapter: ' + (lc ? 'có' : 'KHÔNG có') +
+      ' | ul.list-chapter bên trong: ' + ulCount +
+      ' | <li><a> bên trong: ' + liCount + '.');
+  }
 
   return {
     title,
@@ -1461,21 +1883,38 @@ async function doSearch(query) {
   state.query = query;
   state.loading = true;
   state.error = null;
+  state.errorKind = null;
   render();
-  try {
-    const url = `${BASE}/tim-kiem/?tukhoa=${encodeURIComponent(query)}`;
-    const doc = await fetchPage(url);
-    state.searchResults = parseSearchResults(doc);
-  } catch (e) {
-    state.error = e.message;
-    state.errorKind = e.isSiteChange ? 'site' : 'network';
-    state.searchResults = [];
+
+  // Query 3 nguồn song song:
+  //   - truyenfull.vision  (chính, đọc được)
+  //   - truyenhoan.com     (clone, đọc được trong app)
+  //   - moboreader         (gợi ý, mở tab ngoài)
+  // Fail nhánh nào cũng không phá nhánh kia.
+  let tfResults = [], thResults = [], mbResults = [], tfErr = null;
+  await Promise.all([
+    (async () => {
+      try {
+        const doc = await fetchPage(`${BASE}/tim-kiem/?tukhoa=${encodeURIComponent(query)}`);
+        tfResults = parseSearchResults(doc);
+      } catch (e) { tfErr = e; }
+    })(),
+    (async () => { thResults = await searchTruyenhoan(query); })(),
+    (async () => { mbResults = await searchMoboreader(query); })(),
+  ]);
+
+  state.searchResults = [...tfResults, ...thResults, ...mbResults];
+  // Chỉ báo lỗi nếu TẤT CẢ nguồn đều rỗng — nếu nguồn khác còn truyện thì người dùng vẫn dùng được.
+  if (state.searchResults.length === 0 && tfErr) {
+    state.error = tfErr.message;
+    state.errorKind = tfErr.isSiteChange ? 'site' : 'network';
   }
   state.loading = false;
   render();
 }
 
 async function openStory(url) {
+  if (url && /moboreader\.com/i.test(url)) return openMoboStory(url);
   state.view = 'detail';
   state.loading = true;
   state.error = null;
@@ -1488,42 +1927,16 @@ async function openStory(url) {
     const doc = await fetchPage(url);
     const story = parseStoryDetail(doc, url);
 
-    // Nếu danh sách chương bị phân trang, tải thêm các trang còn lại.
-    // Trước đây bắn tới ~49 request cùng lúc qua proxy → rất dễ bị rate-limit/chặn.
-    // Giờ giới hạn 5 request song song bằng mapLimit.
-    if (story.totalChapterPages > 1) {
-      const baseUrl = ensureTrailingSlash(url);
-      const maxPages = Math.min(story.totalChapterPages, 50);
-      const pageNums = [];
-      for (let p = 2; p <= maxPages; p++) pageNums.push(p);
-
-      const pages = await mapLimit(pageNums, 5, (p) =>
-        fetchPage(`${baseUrl}trang-${p}/`).catch(() => null)
-      );
-
-      const allChapters = [...story.chapters];
-      for (const d of pages) {
-        if (!d) continue;
-        const more = pickAll(d,
-          '#list-chapter .row ul li a',
-          '#list-chapter ul li a',
-          '.list-chapter li a'
-        ).map(a => ({
-          title: attr(a, 'title') || txt(a),
-          url: absoluteUrl(attr(a, 'href')),
-        })).filter(c => c.url && !c.url.includes('javascript'));
-        allChapters.push(...more);
-      }
-      // Khử trùng lặp theo URL
-      const seen = new Set();
-      story.chapters = allChapters.filter(c => {
-        if (seen.has(c.url)) return false;
-        seen.add(c.url);
-        return true;
-      });
-    }
-
+    // RENDER NGAY sau trang 1 — người dùng thấy trang chi tiết + 50 chương đầu
+    // trong ~1s thay vì chờ tải hết các trang phân trang (có thể mất 5-10s).
     state.story = story;
+    state.loading = false;
+    render();
+
+    // Các trang chương còn lại được tải NỀN — bổ sung vào story.chapters,
+    // re-render khi xong để hiện đủ tổng số chương + phân trang đầy đủ.
+    if (story.totalChapterPages > 1) loadMoreChaptersInBackground(story, url);
+    return;
   } catch (e) {
     state.error = e.message;
     state.errorKind = e.isSiteChange ? 'site' : 'network';
@@ -1532,7 +1945,47 @@ async function openStory(url) {
   render();
 }
 
+// Tải các trang phân trang chương còn lại sau khi đã render trang chi tiết.
+// Chạy không chặn UI; bail sớm nếu người dùng đã chuyển sang truyện khác.
+async function loadMoreChaptersInBackground(story, url) {
+  const baseUrl = ensureTrailingSlash(url);
+  const maxPages = Math.min(story.totalChapterPages, 50);
+  const pageNums = [];
+  for (let p = 2; p <= maxPages; p++) pageNums.push(p);
+
+  const seen = new Set(story.chapters.map(c => c.url));
+  await mapLimit(pageNums, 5, async (p) => {
+    if (state.story !== story) return;                 // user navigated away
+    let d;
+    try { d = await fetchPage(`${baseUrl}trang-${p}/`); }
+    catch (_) { return; }                              // bỏ qua trang fail
+    if (state.story !== story) return;
+    const more = pickAll(d,
+      '#list-chapter .row ul li a',
+      '#list-chapter ul li a',
+      '.list-chapter li a'
+    ).map(a => ({
+      title: attr(a, 'title') || txt(a),
+      url: absoluteUrl(attr(a, 'href')),
+    })).filter(c => c.url && !c.url.includes('javascript'));
+    for (const ch of more) {
+      if (!seen.has(ch.url)) { seen.add(ch.url); story.chapters.push(ch); }
+    }
+  });
+
+  // Re-render 1 lần ở cuối (tránh re-render 49 lần làm giật). Chỉ render nếu
+  // người dùng vẫn đang ở trang chi tiết của truyện này.
+  if (state.view === 'detail' && state.story === story) {
+    // Giữ vị trí cuộn hiện tại — re-render trong cùng view không tự khôi phục
+    // scroll, nếu để mặc định người đọc sẽ bị nhảy về đầu trang giữa chừng.
+    const savedScroll = window.scrollY;
+    render();
+    requestAnimationFrame(() => window.scrollTo({ top: savedScroll, behavior: 'auto' }));
+  }
+}
+
 async function openChapter(url, storyContext) {
+  if (url && /moboreader\.com/i.test(url)) return openMoboChapter(url, storyContext);
   state.view = 'reader';
   state.loading = true;
   state.error = null;
@@ -1731,25 +2184,35 @@ function renderSearch() {
   if (state.loading) return renderSearchSkeleton();
   if (state.error) return renderError(state.error, () => doSearch(state.query));
   if (!state.searchResults.length) {
+    const moboUrl = 'https://www.moboreader.com/vi/search?keyword=' + encodeURIComponent(state.query);
     return `
       <div class="empty-state">
         <div>Không tìm thấy kết quả cho "<b>${escapeHtml(state.query)}</b>"</div>
+        <p style="margin-top:14px;font-size:13px;color:var(--text-dim)">
+          Thử tìm ở nguồn khác:
+          <a href="${moboUrl}" target="_blank" rel="noopener noreferrer"
+             style="color:var(--accent);text-decoration:underline;margin-left:4px">moboreader.com ↗</a>
+        </p>
       </div>
     `;
   }
   return `
     <h2 class="section-title">Kết quả cho "${escapeHtml(state.query)}"</h2>
     <div class="results-grid">
-      ${state.searchResults.map(r => `
-        <div class="result-card" onclick='openStory(${jsAttr(r.url)})'>
+      ${state.searchResults.map(r => {
+        // openStory tự route: URL moboreader → openMoboStory (in-app), URL truyenfull → flow gốc.
+        return `
+        <div class="result-card${r.source === 'mobo' ? ' result-mobo' : ''}" onclick='openStory(${jsAttr(r.url)})'>
           <img src="${escapeHtml(r.cover) || 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 70 100%22><rect width=%2270%22 height=%22100%22 fill=%22%2325221d%22/></svg>'}" alt="" loading="lazy" onerror="this.style.opacity=0.3">
           <div class="result-info">
+            ${r.source === 'mobo' ? '<span class="result-source-badge">moboreader ↗</span>' :
+              r.source === 'truyenhoan' ? '<span class="result-source-badge th-badge">truyenhoan</span>' : ''}
             <div class="result-title">${escapeHtml(r.title)}</div>
             ${r.author ? `<div class="result-meta">${escapeHtml(r.author)}</div>` : ''}
             ${r.latest ? `<div class="result-genre">${escapeHtml(r.latest)}</div>` : ''}
           </div>
-        </div>
-      `).join('')}
+        </div>`;
+      }).join('')}
     </div>
   `;
 }
@@ -1797,7 +2260,12 @@ function renderStoryDetail() {
     <div class="chapters-header">
       <h2 class="section-title" style="margin:0">Danh sách chương</h2>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        ${s.chapters.length ? `<button id="prefetch-btn" class="prefetch-btn" onclick="prefetchFromDetail()" title="Tải trước ${PREFETCH_COUNT} chương vào máy để đọc khi mất mạng">⤓ Tải trước ${PREFETCH_COUNT} chương</button>` : ''}
+        ${s.chapters.length && s.source !== 'mobo' ? `<button id="prefetch-btn" class="prefetch-btn" onclick="prefetchFromDetail()" title="Tải trước ${PREFETCH_COUNT} chương vào máy để đọc khi mất mạng">⤓ Tải trước ${PREFETCH_COUNT} chương</button>` : ''}
+        ${s.chapters.length ? `<form class="chapter-jump" onsubmit="event.preventDefault(); jumpToChapter(this.n.value)" title="Nhập số chương rồi Enter để đọc ngay">
+          <span>Đến #</span>
+          <input type="number" name="n" min="1" max="${totalChapters}" placeholder="${totalChapters}" inputmode="numeric" autocomplete="off">
+          <button type="submit">Đọc</button>
+        </form>` : ''}
         <div class="chapters-count">Trang ${curPage} / ${totalPages} • ${totalChapters} chương</div>
       </div>
     </div>
@@ -1837,6 +2305,25 @@ function setChapterPage(p) {
   document.querySelector('.chapters-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Tìm chương theo số thứ tự (1-based) trong danh sách. Pure → dễ test.
+// Trả về { chapter, index, pageIndex } hoặc null nếu ngoài phạm vi / dữ liệu trống.
+function findChapterByNumber(chapters, n, pageSize) {
+  if (!chapters || !chapters.length) return null;
+  const num = parseInt(n, 10);
+  if (!Number.isFinite(num) || num < 1 || num > chapters.length) return null;
+  const idx = num - 1;
+  return { chapter: chapters[idx], index: idx, pageIndex: Math.floor(idx / pageSize) + 1 };
+}
+
+// Người dùng nhập số chương ở trang chi tiết → mở luôn chương đó.
+function jumpToChapter(input) {
+  const s = state.story;
+  if (!s) return;
+  const found = findChapterByNumber(s.chapters, input, PAGE_SIZE);
+  if (!found) return;
+  openChapter(found.chapter.url, { title: s.title, slug: s.slug, url: s.url, cover: s.cover });
+}
+
 function renderReader() {
   if (state.loading) return `<div class="reader-container"><div class="reader-wrap">${renderLoader('Đang tải chương…')}</div></div>`;
   if (state.error) return `<div class="reader-container"><div class="reader-wrap">${renderError(state.error, () => openChapter(state.pendingChapterUrl))}</div></div>`;
@@ -1853,14 +2340,14 @@ function renderReader() {
         <div class="reader-content">${c.html || '<i>Không có nội dung.</i>'}</div>
         <div class="reader-nav">
           <button class="nav-btn" onclick='openChapter(${jsAttr(c.prevUrl)})' ${!c.prevUrl ? 'disabled' : ''}>${icon.prev} Chương trước</button>
-          <button class="nav-btn" onclick="backToStory()" title="Danh sách chương">${icon.list}</button>
+          <button class="nav-btn" onclick="openChapterPicker()" title="Chọn chương">${icon.list}</button>
           <button class="nav-btn" onclick='openChapter(${jsAttr(c.nextUrl)})' ${!c.nextUrl ? 'disabled' : ''}>Chương sau ${icon.next}</button>
         </div>
       </div>
 
       <div class="toolbar">
         <button onclick='openChapter(${jsAttr(c.prevUrl)})' ${!c.prevUrl ? 'disabled' : ''} title="Chương trước">${icon.prev}</button>
-        <button onclick="backToStory()" title="Danh sách chương">${icon.list}</button>
+        <button onclick="openChapterPicker()" title="Chọn chương">${icon.list}</button>
         <button onclick="toggleSettings()" title="Cài đặt">${icon.settings}</button>
         <button onclick='openChapter(${jsAttr(c.nextUrl)})' ${!c.nextUrl ? 'disabled' : ''} title="Chương sau">${icon.next}</button>
       </div>
@@ -1961,6 +2448,123 @@ function updateSetting(key, value) {
   }
 }
 
+// ========== CHAPTER PICKER — overlay chọn chương ngay trong reader ==========
+// Cho phép nhảy thẳng tới bất kỳ chương nào, có ô tìm theo số/tên,
+// không cần thoát ra trang chi tiết.
+function renderChapterPicker(s) {
+  const reading = getReadingState(s.slug);
+  const readSet = new Set((reading && reading.read) || []);
+  const curUrl = (state.chapter && state.chapter.url) || (reading && reading.chapterUrl) || '';
+  return `
+    <div class="picker-backdrop" id="picker-backdrop" onclick="closeChapterPicker()"></div>
+    <div class="picker-panel" id="picker-panel" role="dialog" aria-label="Chọn chương">
+      <div class="panel-handle" onclick="closeChapterPicker()"></div>
+      <div class="picker-header">
+        <div class="picker-title">${escapeHtml(s.title || 'Chọn chương')}</div>
+        <div class="picker-count">${s.chapters.length} chương</div>
+      </div>
+      <div class="picker-search">
+        ${icon.search}
+        <input id="picker-input" type="text" autocomplete="off"
+               placeholder="Tìm theo số hoặc tên chương…"
+               oninput="filterChapterPicker(this.value)">
+      </div>
+      <div class="picker-list" id="picker-list">
+        ${s.chapters.map((ch, idx) => {
+          const isRead = readSet.has(ch.url);
+          const isCurrent = ch.url === curUrl;
+          const cls = ['picker-item'];
+          if (isRead) cls.push('read');
+          if (isCurrent) cls.push('current');
+          // data-search gộp số thứ tự + tiêu đề (lowercase) để lọc nhanh,
+          // bỏ dấu giúp người dùng gõ không dấu vẫn ra.
+          const haystack = ((idx + 1) + ' ' + (ch.title || '')).toLowerCase();
+          return `<a class="${cls.join(' ')}" data-search="${escapeHtml(haystack)}"
+              onclick='pickChapter(${jsAttr(ch.url)})'>
+            <span class="picker-num">#${idx + 1}</span>
+            <span class="picker-name">${escapeHtml(ch.title)}</span>
+          </a>`;
+        }).join('')}
+        <div class="picker-empty" id="picker-empty" style="display:none">Không tìm thấy chương nào khớp.</div>
+      </div>
+    </div>
+  `;
+}
+
+function openChapterPicker() {
+  const s = state.story;
+  // Đảm bảo danh sách chương khớp với chương đang đọc — tránh trường hợp
+  // state.story là tàn dư từ truyện trước (vd: mở từ "Đọc gần đây" sau khi
+  // duyệt một truyện khác).
+  const mismatch = state.chapter && s && s.slug && state.chapter.slug && s.slug !== state.chapter.slug;
+  if (!s || !s.chapters || !s.chapters.length || mismatch) {
+    // Chưa có (đúng) danh sách chương → quay về trang chi tiết để tải lại.
+    // Tự nhiên hơn là chặn người dùng.
+    backToStory();
+    return;
+  }
+  // Overwrite overlay trực tiếp — nếu settings đang mở thì cũng bị thay bằng picker.
+  // KHÔNG gọi toggleSettings() ở đây: nó schedule setTimeout 250ms để xoá overlay,
+  // sẽ xoá luôn picker vừa render → picker biến mất sau ¼ giây.
+  document.getElementById('overlay').innerHTML = renderChapterPicker(s);
+  requestAnimationFrame(() => {
+    const panel = document.getElementById('picker-panel');
+    const backdrop = document.getElementById('picker-backdrop');
+    if (panel) panel.classList.add('open');
+    if (backdrop) backdrop.classList.add('open');
+    // Tự cuộn tới chương đang đọc
+    const cur = document.querySelector('.picker-item.current');
+    if (cur) cur.scrollIntoView({ block: 'center', behavior: 'auto' });
+    // Focus ô tìm sau hiệu ứng (tránh bàn phím mobile bật quá sớm gây lệch layout)
+    setTimeout(() => {
+      const input = document.getElementById('picker-input');
+      if (input && window.innerWidth >= 640) input.focus();
+    }, 280);
+  });
+}
+
+function closeChapterPicker() {
+  const panel = document.getElementById('picker-panel');
+  const backdrop = document.getElementById('picker-backdrop');
+  if (!panel) return;
+  panel.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+  setTimeout(() => {
+    const ov = document.getElementById('overlay');
+    if (ov) ov.innerHTML = '';
+  }, 250);
+}
+
+function pickChapter(url) {
+  closeChapterPicker();
+  // Chờ animation đóng rồi mở chương — UX mượt hơn
+  const ctx = state.story ? {
+    title: state.story.title, slug: state.story.slug,
+    url: state.story.url, cover: state.story.cover,
+  } : null;
+  setTimeout(() => openChapter(url, ctx), 60);
+}
+
+// Lọc danh sách: gõ "100" → chỉ hiện chương có số 100; gõ tên → khớp tiêu đề.
+// Bỏ dấu tiếng Việt 2 bên để gõ không dấu vẫn ra (vd: "khai thien" khớp "Khải Thiên").
+// Dùng ̀-ͯ thay vì ký tự kết hợp literal cho rõ ràng.
+function _stripDiacritics(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+function filterChapterPicker(q) {
+  q = _stripDiacritics(q).trim();
+  const items = document.querySelectorAll('.picker-item');
+  let shown = 0;
+  for (const it of items) {
+    const hay = _stripDiacritics(it.getAttribute('data-search') || '');
+    const match = !q || hay.includes(q);
+    it.style.display = match ? '' : 'none';
+    if (match) shown++;
+  }
+  const empty = document.getElementById('picker-empty');
+  if (empty) empty.style.display = shown ? 'none' : '';
+}
+
 // ========== ROUTING / HANDLERS ==========
 function handleSearch(q) {
   q = (q || '').trim();
@@ -1985,8 +2589,16 @@ function handleBack() {
 
 // Keyboard shortcuts (reader)
 document.addEventListener('keydown', (e) => {
+  // Esc: đóng picker/settings ở bất kỳ view nào — không lệ thuộc trạng thái reader
+  if (e.key === 'Escape') {
+    if (document.getElementById('picker-panel')) { closeChapterPicker(); return; }
+    const settings = document.getElementById('settings-panel');
+    if (settings && settings.classList.contains('open')) { toggleSettings(); return; }
+  }
   if (state.view !== 'reader' || !state.chapter) return;
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  // Đang mở picker thì arrow trái/phải dành cho input, không nhảy chương
+  if (document.getElementById('picker-panel')) return;
   if (e.key === 'ArrowLeft' && state.chapter.prevUrl) openChapter(state.chapter.prevUrl);
   if (e.key === 'ArrowRight' && state.chapter.nextUrl) openChapter(state.chapter.nextUrl);
 });
@@ -2254,6 +2866,9 @@ function chapterUrlsAfter(currentUrl, count) {
 // Luôn giữ sẵn PREFETCH_COUNT chương phía trước. Đọc tiến 1 chương → cửa sổ trượt theo
 // và chỉ tải đúng phần mới (thường là 1 chương) lọt vào cuối cửa sổ.
 function schedulePrefetchAfter(currentUrl) {
+  // Moboreader chương cần API riêng → fetchPage(chapter URL) sẽ fail/parser ném →
+  // prefetch chỉ gây noise. Bỏ qua.
+  if (state.story && state.story.source === 'mobo') return;
   setTimeout(() => {
     const list = state.story && state.story.chapters;
 
