@@ -2090,32 +2090,42 @@ const _tts = {
     catch (e) { console.error('[tts] speak() throw:', e); this.stop(); }
   },
 
-  async start() {
+  // QUAN TRỌNG: start() phải đồng bộ (không await/setTimeout trước speak()) — iOS
+  // Safari/Chrome bỏ user-gesture nếu có await giữa click và speak() → silent fail.
+  start() {
     if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
       alert('Trình duyệt không hỗ trợ đọc to (Web Speech API).');
       return;
     }
     if (this.state === 'paused') { this.resume(); return; }
 
-    // Dọn synth trước — Chrome cần delay giữa cancel() và speak() mới
-    this._resetSynth();
     this.chunks = this._buildChunks();
     if (!this.chunks.length) { alert('Không có đoạn văn để đọc.'); return; }
 
-    // Nạp voices (lần đầu Chrome cần đợi async)
-    const voices = await _ttsGetVoicesAsync();
+    // Voice phải lấy ĐỒNG BỘ ngay đây (cache từ _ttsPreload chạy lúc boot).
+    // Nếu chưa có cache (cold boot iOS), getVoices() sync; nếu vẫn rỗng → không set voice.
+    const voices = (this._voicesCache && this._voicesCache.length)
+      ? this._voicesCache
+      : (window.speechSynthesis.getVoices() || []);
     this.voice =
       voices.find(v => /^vi[-_]/i.test(v.lang)) ||
       voices.find(v => /Vietnam/i.test(v.name)) ||
       null;
-    console.log('[tts] có', voices.length, 'giọng;', this.voice ? 'dùng giọng VI: ' + this.voice.name : 'không có giọng VI, dùng giọng mặc định (phát âm có thể sai)');
+    if (voices.length) this._voicesCache = voices;
+    console.log('[tts] có', voices.length, 'giọng;',
+      this.voice ? 'dùng giọng VI: ' + this.voice.name : 'chưa có giọng VI (fallback default)');
+
+    // KHÔNG cancel() nếu synth đang yên — cancel() trước speak() trên iOS gây silent fail.
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      try { window.speechSynthesis.cancel(); } catch (_) {}
+    }
 
     this.idx = 0;
     this.state = 'playing';
     this._keepAliveStart();
     this._renderBtn();
-    // Chrome cancel-then-speak race → tách bằng setTimeout
-    setTimeout(() => this._speakIdx(), 60);
+    // Gọi speak() ĐỒNG BỘ ngay đây — gesture chain còn nguyên
+    this._speakIdx();
   },
 
   pause() {
@@ -3260,6 +3270,20 @@ function render() {
 applySettings();
 checkStorage();
 render();
+
+// Pre-load TTS voices lúc boot — tránh `await getVoices()` trong gesture handler (iOS lose user-gesture).
+(function _ttsPreload() {
+  if (!('speechSynthesis' in window)) return;
+  const synth = window.speechSynthesis;
+  const sync = synth.getVoices() || [];
+  if (sync.length) _tts._voicesCache = sync;
+  // Sự kiện voiceschanged firing trễ trên Chrome/Edge → update cache khi nó tới
+  if ('onvoiceschanged' in synth) {
+    synth.addEventListener('voiceschanged', () => {
+      _tts._voicesCache = synth.getVoices() || [];
+    });
+  }
+})();
 </script>
 </body>
 </html>
