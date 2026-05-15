@@ -1308,8 +1308,9 @@ function loadSettings() {
       theme: 'dark',
       contentWidth: 720,
       ttsRate: 1.0,
+      ttsAutoNext: true,           // tự chuyển + đọc tiếp chương sau khi hết
     }, s);
-  } catch { return { fontSize: 18, fontFamily: 'serif', theme: 'dark', contentWidth: 720, ttsRate: 1.0 }; }
+  } catch { return { fontSize: 18, fontFamily: 'serif', theme: 'dark', contentWidth: 720, ttsRate: 1.0, ttsAutoNext: true }; }
 }
 function saveSettings() {
   localStorage.setItem('kien_ne_settings', JSON.stringify(state.settings));
@@ -1894,7 +1895,10 @@ async function loadMoreChaptersInBackground(story, url) {
 }
 
 async function openChapter(url, storyContext) {
-  _tts.stop();                  // chương cũ → dừng đọc to (DOM sắp bị thay)
+  // Nếu đang auto-advance từ TTS, dùng _softStop để KHÔNG xoá cờ _autoResumeAfterLoad
+  // (cờ này cần giữ lại để cuối hàm gọi _tts.start() đọc tiếp).
+  if (_tts._autoResumeAfterLoad) _tts._softStop();
+  else _tts.stop();
   state.view = 'reader';
   state.loading = true;
   state.error = null;
@@ -1945,6 +1949,12 @@ async function openChapter(url, storyContext) {
 
   // Tải ngầm ~20 chương kế tiếp vào IndexedDB — lần đọc sau khỏi cần mạng.
   if (state.chapter && !state.error) schedulePrefetchAfter(state.chapter.url);
+
+  // Auto-advance TTS: chương trước hết → đã openChapter(nextUrl) với cờ này → đọc tiếp.
+  if (state.chapter && !state.error && _tts._autoResumeAfterLoad) {
+    _tts._autoResumeAfterLoad = false;
+    _tts.start();              // user-gesture đã unlock từ ▶ ban đầu, ko cần gesture mới
+  }
 }
 
 function goHome() {
@@ -2056,7 +2066,7 @@ const _tts = {
 
   _speakIdx() {
     if (this.state !== 'playing') return;
-    if (this.idx >= this.chunks.length) { this.stop(); return; }
+    if (this.idx >= this.chunks.length) { this._finishChapter(); return; }
     const ch = this.chunks[this.idx];
     const u = new SpeechSynthesisUtterance(ch.text);
     u.lang = 'vi-VN';
@@ -2142,7 +2152,8 @@ const _tts = {
     this._renderBtn();
   },
 
-  stop() {
+  // Dọn synth + DOM, KHÔNG đụng flag _autoResumeAfterLoad (cho phép auto-advance tiếp).
+  _softStop() {
     this._keepAliveStop();
     try { window.speechSynthesis.cancel(); } catch (_) {}
     document.querySelectorAll('.tts-highlight').forEach(el => el.classList.remove('tts-highlight'));
@@ -2150,6 +2161,28 @@ const _tts = {
     this.chunks = [];
     this.idx = 0;
     this._renderBtn();
+  },
+
+  // Dừng do user (click nút, navigate) — huỷ luôn auto-resume nếu có.
+  stop() {
+    this._softStop();
+    this._autoResumeAfterLoad = false;
+  },
+
+  // Hết chương — nếu user bật auto-next + có nextUrl → mở chương sau & tự đọc tiếp.
+  _finishChapter() {
+    const ch = state.chapter;
+    const autoNext = !state.settings || state.settings.ttsAutoNext !== false;   // mặc định bật
+    if (autoNext && ch && ch.nextUrl) {
+      this._autoResumeAfterLoad = true;            // openChapter sẽ thấy cờ → softStop + resume sau load
+      const ctx = state.story ? {
+        title: state.story.title, slug: state.story.slug,
+        url: state.story.url,    cover: state.story.cover,
+      } : null;
+      openChapter(ch.nextUrl, ctx);
+    } else {
+      this.stop();                                  // hết truyện (no nextUrl) hoặc auto-next tắt
+    }
   },
 
   toggle() {
@@ -2522,6 +2555,14 @@ function renderSettingsPanel() {
         <div class="setting-label"><span>Tốc độ đọc to</span><span>${(s.ttsRate || 1).toFixed(2)}×</span></div>
         <input type="range" min="0.7" max="1.8" step="0.05" value="${s.ttsRate || 1}"
                oninput="updateSetting('ttsRate', +this.value)">
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-label"><span>Tự đọc chương sau</span></div>
+        <div class="setting-options">
+          <button class="${s.ttsAutoNext !== false ? 'active' : ''}" onclick="updateSetting('ttsAutoNext', true)">Bật</button>
+          <button class="${s.ttsAutoNext === false ? 'active' : ''}" onclick="updateSetting('ttsAutoNext', false)">Tắt</button>
+        </div>
       </div>
     </div>
   `;
