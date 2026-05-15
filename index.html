@@ -556,6 +556,16 @@
   .toolbar button:hover { background: var(--bg-elev-2); color: var(--accent); }
   .toolbar button:disabled { opacity: 0.3; cursor: not-allowed; }
   .toolbar svg { width: 20px; height: 20px; }
+  /* Nút tốc độ TTS — text-only, hẹp hơn icon button */
+  .toolbar button.tts-rate {
+    width: auto;
+    min-width: 44px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.3px;
+  }
   /* TTS button — sáng accent khi đang đọc/tạm dừng */
   .toolbar button.tts-active { background: var(--bg-elev-2); color: var(--accent); }
   .toolbar button.tts-active::after {
@@ -1316,6 +1326,13 @@ function saveSettings() {
   localStorage.setItem('kien_ne_settings', JSON.stringify(state.settings));
   applySettings();
 }
+
+// Set state.error + errorKind từ exception đã bắt. Phân biệt 'site' (cấu trúc nguồn
+// đổi → SiteStructureError) vs 'network' (mạng/proxy). Dùng cho catch trong action.
+function setActionError(e) {
+  state.error = e.message;
+  state.errorKind = e.isSiteChange ? 'site' : 'network';
+}
 function applySettings() {
   const root = document.documentElement;
   root.style.setProperty('--reader-font-size', state.settings.fontSize + 'px');
@@ -1802,8 +1819,7 @@ async function doSearch(query) {
     if (pending === 0) {
       state.loading = false;
       if (state.searchResults.length === 0 && tfErr) {
-        state.error = tfErr.message;
-        state.errorKind = tfErr.isSiteChange ? 'site' : 'network';
+        setActionError(tfErr);
       } else if (state.searchResults.length) {
         setSearchCache(query, state.searchResults);
       }
@@ -1848,8 +1864,7 @@ async function openStory(url) {
     if (story.totalChapterPages > 1) loadMoreChaptersInBackground(story, url);
     return;
   } catch (e) {
-    state.error = e.message;
-    state.errorKind = e.isSiteChange ? 'site' : 'network';
+    setActionError(e);
   }
   state.loading = false;
   render();
@@ -1940,8 +1955,7 @@ async function openChapter(url, storyContext) {
       cover: (storyContext && storyContext.cover) || (state.story && state.story.cover) || '',
     });
   } catch (e) {
-    state.error = e.message;
-    state.errorKind = e.isSiteChange ? 'site' : 'network';
+    setActionError(e);
   }
   state.loading = false;
   render();
@@ -2191,6 +2205,25 @@ const _tts = {
     else this.resume();
   },
 
+  // Áp rate mới NGAY vào đoạn đang đọc — restart utterance hiện tại với rate mới.
+  // SpeechSynthesisUtterance không hỗ trợ đổi rate giữa chừng → phải cancel + speak lại.
+  applyRateLive() {
+    this._renderRateBtn();
+    if (this.state !== 'playing' && this.state !== 'paused') return;
+    const wasPaused = this.state === 'paused';
+    try { window.speechSynthesis.cancel(); } catch (_) {}
+    this.state = 'playing';
+    this._speakIdx();                              // đọc lại đoạn hiện tại với rate mới
+    if (wasPaused) setTimeout(() => this.pause(), 80);  // giữ trạng thái paused nếu trước đó đang pause
+  },
+
+  _renderRateBtn() {
+    const btn = document.getElementById('tts-rate-btn');
+    if (!btn) return;
+    const r = (state.settings && state.settings.ttsRate) || 1.0;
+    btn.textContent = r.toFixed(2).replace(/\.?0+$/, '') + '×';
+  },
+
   _renderBtn() {
     const btn = document.getElementById('tts-btn');
     if (!btn) return;
@@ -2210,6 +2243,19 @@ const _tts = {
   },
 };
 function toggleTts() { _tts.toggle(); }
+
+// Preset tốc độ TTS — cycle qua từng bước khi click nút "×rate" trong toolbar.
+const TTS_RATE_PRESETS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+function cycleTtsRate() {
+  const cur = (state.settings && state.settings.ttsRate) || 1.0;
+  // Tìm preset gần nhất rồi chuyển sang preset kế. Wrap quanh.
+  let i = TTS_RATE_PRESETS.findIndex(r => Math.abs(r - cur) < 0.05);
+  if (i < 0) i = TTS_RATE_PRESETS.findIndex(r => r >= cur);   // tốc độ tuỳ chỉnh từ slider
+  if (i < 0) i = TTS_RATE_PRESETS.length - 1;
+  const next = TTS_RATE_PRESETS[(i + 1) % TTS_RATE_PRESETS.length];
+  updateSetting('ttsRate', next);                            // saveSettings + applySettings
+  _tts.applyRateLive();                                       // áp ngay vào đoạn đang đọc
+}
 
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({
@@ -2489,6 +2535,7 @@ function renderReader() {
         <button onclick='openChapter(${jsAttr(c.prevUrl)})' ${!c.prevUrl ? 'disabled' : ''} title="Chương trước">${icon.prev}</button>
         <button onclick="openChapterPicker()" title="Chọn chương">${icon.list}</button>
         <button id="tts-btn" onclick="toggleTts()" title="Đọc to">${icon.play}</button>
+        <button id="tts-rate-btn" class="tts-rate" onclick="cycleTtsRate()" title="Tốc độ đọc (click để xoay vòng)">${((state.settings && state.settings.ttsRate) || 1).toFixed(2).replace(/\.?0+$/, '')}×</button>
         <button onclick="toggleSettings()" title="Cài đặt">${icon.settings}</button>
         <button onclick='openChapter(${jsAttr(c.nextUrl)})' ${!c.nextUrl ? 'disabled' : ''} title="Chương sau">${icon.next}</button>
       </div>
@@ -2553,8 +2600,8 @@ function renderSettingsPanel() {
 
       <div class="setting-group">
         <div class="setting-label"><span>Tốc độ đọc to</span><span>${(s.ttsRate || 1).toFixed(2)}×</span></div>
-        <input type="range" min="0.7" max="1.8" step="0.05" value="${s.ttsRate || 1}"
-               oninput="updateSetting('ttsRate', +this.value)">
+        <input type="range" min="0.5" max="2.5" step="0.05" value="${s.ttsRate || 1}"
+               oninput="updateSetting('ttsRate', +this.value); _tts.applyRateLive();">
       </div>
 
       <div class="setting-group">
