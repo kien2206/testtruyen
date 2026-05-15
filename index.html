@@ -300,6 +300,27 @@
     animation: spin 0.8s linear infinite;
     display: inline-block;
   }
+  /* Nút mở rộng search sang moboreader — chỉ hiện khi user gõ (đã skip mobo) */
+  .search-more-btn {
+    display: block;
+    width: 100%;
+    margin: 20px auto 0;
+    max-width: 360px;
+    padding: 11px 16px;
+    background: var(--bg-elev);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .search-more-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg-elev-2);
+  }
 
   /* Story detail */
   .story-header {
@@ -1901,22 +1922,61 @@ function parseChapter(doc, url) {
 // Generation token: nếu người dùng search query mới trước khi nguồn cũ trả về,
 // các response cũ sẽ bị bỏ — tránh "kết quả ma" của lần search trước.
 let _searchGen = 0;
-async function doSearch(query) {
+
+// In-memory LRU cache: query lặp lại trong 5 phút → render TỨC THÌ (0ms), không gọi mạng.
+// Hữu ích khi người dùng quay lại / back / gõ lại từ khoá vừa tìm.
+const _searchCacheMap = new Map();
+const SEARCH_CACHE_TTL = 5 * 60 * 1000;
+const SEARCH_CACHE_MAX = 20;
+function cachedSearch(query) {
+  const e = _searchCacheMap.get(query);
+  if (!e) return null;
+  if (Date.now() - e.ts > SEARCH_CACHE_TTL) { _searchCacheMap.delete(query); return null; }
+  _searchCacheMap.delete(query); _searchCacheMap.set(query, e);   // bump LRU
+  return e.results;
+}
+function setSearchCache(query, results) {
+  if (_searchCacheMap.size >= SEARCH_CACHE_MAX) {
+    _searchCacheMap.delete(_searchCacheMap.keys().next().value);
+  }
+  _searchCacheMap.set(query, { results, ts: Date.now() });
+}
+
+async function doSearch(query, opts) {
+  const includeMobo = !opts || opts.includeMobo !== false;
   const gen = ++_searchGen;
   state.view = 'search';
   state.query = query;
-  state.loading = true;
   state.error = null;
   state.errorKind = null;
+  state.searchIncludesMobo = includeMobo;
+
+  // CACHE HIT: render tức thì, không gọi mạng. Cache theo query + includeMobo
+  // (cùng "kiếm hiệp" nhưng gõ vs Enter cho 2 tập kết quả khác nhau).
+  const cacheKey = (includeMobo ? '+mb:' : '-mb:') + query;
+  const cached = cachedSearch(cacheKey);
+  if (cached && cached.length) {
+    state.searchResults = [...cached];
+    state.searchSources = { tf: 'cached', th: 'cached', mb: includeMobo ? 'cached' : 'skipped' };
+    state.loading = false;
+    render();
+    return;
+  }
+
+  state.loading = true;
   state.searchResults = [];
-  state.searchSources = { tf: 'loading', th: 'loading', mb: 'loading' };  // per-source status
+  state.searchSources = {
+    tf: 'loading',
+    th: 'loading',
+    mb: includeMobo ? 'loading' : 'skipped',
+  };
   render();
 
   // Progressive render: KHÔNG đợi Promise.all — mỗi nguồn xong là render ngay.
-  // Truyenfull thường ~1s, truyenhoan ~1-2s, moboreader ~3-5s (251KB). Trước đây
-  // người dùng phải đợi nguồn chậm nhất; giờ thấy kết quả truyenfull trước.
+  // Truyenfull ~1s, truyenhoan ~1-2s, moboreader ~3-5s (251KB) — moboreader bị bỏ
+  // qua khi gõ; chỉ fire khi nhấn Enter (user chủ động yêu cầu thêm nguồn).
   let tfErr = null;
-  let pending = 3;
+  let pending = includeMobo ? 3 : 2;
   function appendResults(items, sourceKey, status) {
     if (gen !== _searchGen) return;                  // user đã search query khác
     if (items && items.length) state.searchResults = [...state.searchResults, ...items];
@@ -1927,12 +1987,15 @@ async function doSearch(query) {
       if (state.searchResults.length === 0 && tfErr) {
         state.error = tfErr.message;
         state.errorKind = tfErr.isSiteChange ? 'site' : 'network';
+      } else if (state.searchResults.length) {
+        // Lưu cache cho lần search lại trong 5 phút tới (key gồm cờ includeMobo)
+        setSearchCache(cacheKey, state.searchResults);
       }
     }
     render();
   }
 
-  // Bắn 3 nguồn song song, không await ở scope ngoài
+  // Bắn các nguồn song song, không await ở scope ngoài
   (async () => {
     try {
       const doc = await fetchPage(`${BASE}/tim-kiem/?tukhoa=${encodeURIComponent(query)}`);
@@ -1943,10 +2006,12 @@ async function doSearch(query) {
     const r = await searchTruyenhoan(query);
     appendResults(r, 'th', r.length ? 'done' : 'fail');
   })();
-  (async () => {
-    const r = await searchMoboreader(query);
-    appendResults(r, 'mb', r.length ? 'done' : 'fail');
-  })();
+  if (includeMobo) {
+    (async () => {
+      const r = await searchMoboreader(query);
+      appendResults(r, 'mb', r.length ? 'done' : 'fail');
+    })();
+  }
 }
 
 async function openStory(url) {
@@ -2243,6 +2308,14 @@ function renderSearch() {
     ? `<span class="search-loading-hint"><span class="search-spinner"></span> Đang tải thêm từ ${loadingSources.join(', ')}…</span>`
     : '';
 
+  // Nếu user gõ search (KHÔNG bao gồm mobo) → cho phép mở rộng sang mobo bằng 1 click.
+  // Tránh chậm-mặc-định: chỉ chạy mobo khi user chủ động yêu cầu.
+  const moboHint = (ss.mb === 'skipped' && !state.loading)
+    ? `<button class="search-more-btn" onclick='doSearch(${jsAttr(state.query)}, {includeMobo:true})'>
+         + Tìm thêm ở moboreader (chậm hơn — ~3-5s)
+       </button>`
+    : '';
+
   return `
     <h2 class="section-title">Kết quả cho "${escapeHtml(state.query)}" ${loadingHint}</h2>
     <div class="results-grid">
@@ -2261,6 +2334,7 @@ function renderSearch() {
         </div>`;
       }).join('')}
     </div>
+    ${moboHint}
   `;
 }
 
@@ -2613,10 +2687,13 @@ function filterChapterPicker(q) {
 }
 
 // ========== ROUTING / HANDLERS ==========
-function handleSearch(q) {
+// fromSubmit=true (nhấn Enter) → search tất cả 3 nguồn.
+// fromSubmit=false (gõ debounced) → bỏ qua moboreader cho nhanh; user nhấn Enter
+// để mở rộng tìm sang moboreader.
+function handleSearch(q, opts) {
   q = (q || '').trim();
   if (!q) return;
-  doSearch(q);
+  doSearch(q, opts || { includeMobo: true });
 }
 
 function handleBack() {
@@ -3093,7 +3170,8 @@ function handleSearchInput(q) {
   clearTimeout(_searchTimer);
   q = (q || '').trim();
   if (!q || q.length < 2) return;
-  _searchTimer = setTimeout(() => handleSearch(q), 500);
+  // 300ms debounce + KHÔNG include mobo khi typing (251KB chậm); user Enter để có mobo.
+  _searchTimer = setTimeout(() => handleSearch(q, { includeMobo: false }), 300);
 }
 
 // ========== UX helpers (description toggle) ==========
