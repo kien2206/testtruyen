@@ -280,6 +280,26 @@
     margin-bottom: 18px;
     color: var(--text);
   }
+  /* Indicator "đang tải nguồn khác" cạnh title — progressive search */
+  .search-loading-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Be Vietnam Pro', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 12px;
+    vertical-align: middle;
+  }
+  .search-spinner {
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+  }
 
   /* Story detail */
   .story-header {
@@ -1878,39 +1898,55 @@ function parseChapter(doc, url) {
 }
 
 // ========== ACTIONS ==========
+// Generation token: nếu người dùng search query mới trước khi nguồn cũ trả về,
+// các response cũ sẽ bị bỏ — tránh "kết quả ma" của lần search trước.
+let _searchGen = 0;
 async function doSearch(query) {
+  const gen = ++_searchGen;
   state.view = 'search';
   state.query = query;
   state.loading = true;
   state.error = null;
   state.errorKind = null;
+  state.searchResults = [];
+  state.searchSources = { tf: 'loading', th: 'loading', mb: 'loading' };  // per-source status
   render();
 
-  // Query 3 nguồn song song:
-  //   - truyenfull.vision  (chính, đọc được)
-  //   - truyenhoan.com     (clone, đọc được trong app)
-  //   - moboreader         (gợi ý, mở tab ngoài)
-  // Fail nhánh nào cũng không phá nhánh kia.
-  let tfResults = [], thResults = [], mbResults = [], tfErr = null;
-  await Promise.all([
-    (async () => {
-      try {
-        const doc = await fetchPage(`${BASE}/tim-kiem/?tukhoa=${encodeURIComponent(query)}`);
-        tfResults = parseSearchResults(doc);
-      } catch (e) { tfErr = e; }
-    })(),
-    (async () => { thResults = await searchTruyenhoan(query); })(),
-    (async () => { mbResults = await searchMoboreader(query); })(),
-  ]);
-
-  state.searchResults = [...tfResults, ...thResults, ...mbResults];
-  // Chỉ báo lỗi nếu TẤT CẢ nguồn đều rỗng — nếu nguồn khác còn truyện thì người dùng vẫn dùng được.
-  if (state.searchResults.length === 0 && tfErr) {
-    state.error = tfErr.message;
-    state.errorKind = tfErr.isSiteChange ? 'site' : 'network';
+  // Progressive render: KHÔNG đợi Promise.all — mỗi nguồn xong là render ngay.
+  // Truyenfull thường ~1s, truyenhoan ~1-2s, moboreader ~3-5s (251KB). Trước đây
+  // người dùng phải đợi nguồn chậm nhất; giờ thấy kết quả truyenfull trước.
+  let tfErr = null;
+  let pending = 3;
+  function appendResults(items, sourceKey, status) {
+    if (gen !== _searchGen) return;                  // user đã search query khác
+    if (items && items.length) state.searchResults = [...state.searchResults, ...items];
+    state.searchSources[sourceKey] = status;
+    pending--;
+    if (pending === 0) {
+      state.loading = false;
+      if (state.searchResults.length === 0 && tfErr) {
+        state.error = tfErr.message;
+        state.errorKind = tfErr.isSiteChange ? 'site' : 'network';
+      }
+    }
+    render();
   }
-  state.loading = false;
-  render();
+
+  // Bắn 3 nguồn song song, không await ở scope ngoài
+  (async () => {
+    try {
+      const doc = await fetchPage(`${BASE}/tim-kiem/?tukhoa=${encodeURIComponent(query)}`);
+      appendResults(parseSearchResults(doc), 'tf', 'done');
+    } catch (e) { tfErr = e; appendResults([], 'tf', 'fail'); }
+  })();
+  (async () => {
+    const r = await searchTruyenhoan(query);
+    appendResults(r, 'th', r.length ? 'done' : 'fail');
+  })();
+  (async () => {
+    const r = await searchMoboreader(query);
+    appendResults(r, 'mb', r.length ? 'done' : 'fail');
+  })();
 }
 
 async function openStory(url) {
@@ -2181,7 +2217,8 @@ function renderSearchSkeleton() {
 }
 
 function renderSearch() {
-  if (state.loading) return renderSearchSkeleton();
+  // Progressive: nếu đang load NHƯNG đã có kết quả → hiện danh sách + thanh "đang tải nguồn khác"
+  if (state.loading && !state.searchResults.length) return renderSearchSkeleton();
   if (state.error) return renderError(state.error, () => doSearch(state.query));
   if (!state.searchResults.length) {
     const moboUrl = 'https://www.moboreader.com/vi/search?keyword=' + encodeURIComponent(state.query);
@@ -2196,8 +2233,18 @@ function renderSearch() {
       </div>
     `;
   }
+  // Indicator các nguồn còn đang tải (chỉ hiện khi đã có kết quả từ nguồn nào đó).
+  const ss = state.searchSources || {};
+  const loadingSources = [];
+  if (ss.tf === 'loading') loadingSources.push('truyenfull');
+  if (ss.th === 'loading') loadingSources.push('truyenhoan');
+  if (ss.mb === 'loading') loadingSources.push('moboreader');
+  const loadingHint = loadingSources.length
+    ? `<span class="search-loading-hint"><span class="search-spinner"></span> Đang tải thêm từ ${loadingSources.join(', ')}…</span>`
+    : '';
+
   return `
-    <h2 class="section-title">Kết quả cho "${escapeHtml(state.query)}"</h2>
+    <h2 class="section-title">Kết quả cho "${escapeHtml(state.query)}" ${loadingHint}</h2>
     <div class="results-grid">
       ${state.searchResults.map(r => {
         // openStory tự route: URL moboreader → openMoboStory (in-app), URL truyenfull → flow gốc.
