@@ -94,7 +94,7 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(15, 14, 12, 0.92);
+    background: var(--header-bg, rgba(15, 14, 12, 0.92));
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
   }
@@ -575,6 +575,27 @@
     background: var(--accent);
   }
   .toolbar button.tts-active { position: relative; }
+  /* <select> giọng đọc trong Settings panel */
+  .voice-select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+                      linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 50%, calc(100% - 10px) 50%;
+    background-size: 6px 6px;
+    background-repeat: no-repeat;
+    padding-right: 30px;
+  }
+  .voice-select:focus { border-color: var(--accent); }
+  .voice-select:disabled { opacity: 0.6; cursor: wait; }
   /* Đoạn văn đang được đọc to — viền trái accent + nhẹ background */
   .reader-content p.tts-highlight {
     background: rgba(200,150,90,0.08);
@@ -1011,7 +1032,7 @@
     .story-cta-bar {
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      background: rgba(15, 14, 12, 0.96);
+      background: var(--header-bg, rgba(15, 14, 12, 0.96));
       backdrop-filter: blur(14px);
       border-top: 1px solid var(--border);
       padding: 10px 14px;
@@ -1319,8 +1340,9 @@ function loadSettings() {
       contentWidth: 720,
       ttsRate: 1.0,
       ttsAutoNext: true,           // tự chuyển + đọc tiếp chương sau khi hết
+      ttsVoice: '',                // tên giọng đọc do user chọn; rỗng = auto (ưu tiên VI)
     }, s);
-  } catch { return { fontSize: 18, fontFamily: 'serif', theme: 'dark', contentWidth: 720, ttsRate: 1.0, ttsAutoNext: true }; }
+  } catch { return { fontSize: 18, fontFamily: 'serif', theme: 'dark', contentWidth: 720, ttsRate: 1.0, ttsAutoNext: true, ttsVoice: '' }; }
 }
 function saveSettings() {
   localStorage.setItem('kien_ne_settings', JSON.stringify(state.settings));
@@ -1343,14 +1365,36 @@ function applySettings() {
     mono: "'Courier New', monospace",
   };
   root.style.setProperty('--reader-font-family', fontMap[state.settings.fontFamily] || fontMap.serif);
+  // Palette đầy đủ cho TOÀN APP (không chỉ vùng đọc). Mỗi theme override mọi
+  // biến màu gốc → home/search/detail/reader đều đổi theo.
   const themeMap = {
-    dark: { bg: '#0f0e0c', text: '#e8e0d0' },
-    sepia: { bg: '#fdf6e3', text: '#3a2d1f' },
-    light: { bg: '#ffffff', text: '#1a1815' },
+    dark: {
+      '--bg': '#0f0e0c', '--bg-elev': '#1a1815', '--bg-elev-2': '#25221d',
+      '--text': '#e8e0d0', '--text-muted': '#9a9082', '--text-dim': '#6e655a',
+      '--accent': '#c8965a', '--accent-hover': '#d9a76b',
+      '--border': '#2c2823', '--danger': '#d97757',
+      '--header-bg': 'rgba(15,14,12,0.92)',
+      '--reader-bg': '#0f0e0c', '--reader-text': '#e8e0d0',
+    },
+    light: {
+      '--bg': '#ffffff', '--bg-elev': '#f5f3ef', '--bg-elev-2': '#ebe7df',
+      '--text': '#1f1b16', '--text-muted': '#5c554a', '--text-dim': '#8a8175',
+      '--accent': '#b06f2c', '--accent-hover': '#9a5f25',
+      '--border': '#ddd8cf', '--danger': '#c0492b',
+      '--header-bg': 'rgba(255,255,255,0.92)',
+      '--reader-bg': '#ffffff', '--reader-text': '#1a1815',
+    },
+    sepia: {
+      '--bg': '#f4ecd8', '--bg-elev': '#ece2c8', '--bg-elev-2': '#e3d7b8',
+      '--text': '#3a2d1f', '--text-muted': '#6b5a44', '--text-dim': '#8f7c5f',
+      '--accent': '#9a6a2f', '--accent-hover': '#875c28',
+      '--border': '#d8c9a8', '--danger': '#b04a2c',
+      '--header-bg': 'rgba(244,236,216,0.94)',
+      '--reader-bg': '#f4ecd8', '--reader-text': '#3a2d1f',
+    },
   };
   const t = themeMap[state.settings.theme] || themeMap.dark;
-  root.style.setProperty('--reader-bg', t.bg);
-  root.style.setProperty('--reader-text', t.text);
+  for (const k in t) root.style.setProperty(k, t[k]);
 }
 
 // Reading progress storage
@@ -2033,28 +2077,41 @@ const _tts = {
   chunks: [],
   idx: 0,
   voice: null,                 // chọn 1 lần ở start(), tái dùng — tránh getVoices() lặp
-  _keepAliveTimer: null,       // Chrome bug: synth tự pause sau ~15s → ping định kỳ
+  _watchdog: null,             // timer cứu khi onend của Chrome không fire
 
-  // Chia .reader-content thành mảng { text, el } để highlight + scroll-follow.
-  // Truyenfull/truyenhoan đôi khi dùng <br> thay vì <p> → fallback dùng innerText.
+  // Chia .reader-content thành mảng { text, el }.
+  // Truyenfull/truyenhoan đôi khi dùng <br> thay vì <p> → fallback innerText.
+  // Đoạn dài được CHẺ NHỎ ≤ ~180 ký tự tại ranh giới câu: utterance ngắn → onend
+  // fire ổn định (Chrome hay nuốt onend với utterance > ~15s).
   _buildChunks() {
     const root = document.querySelector('.reader-content');
     if (!root) return [];
-    const out = [];
+    const raw = [];
 
-    // 1) Ưu tiên <p> — có element để highlight + scroll
     for (const p of root.querySelectorAll('p')) {
       const t = (p.textContent || '').trim();
-      if (t) out.push({ text: t, el: p });
+      if (t) raw.push({ text: t, el: p });
     }
-    if (out.length) return out;
+    if (!raw.length) {
+      const text = (root.innerText || root.textContent || '').trim();
+      if (!text) return [];
+      text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 1)
+        .forEach(t => raw.push({ text: t, el: root }));
+    }
 
-    // 2) Fallback: chương dùng <br>. innerText respects <br> → có '\n'. Split theo dòng.
-    //    el = root → không highlight được từng đoạn, nhưng vẫn đọc to được.
-    const text = (root.innerText || root.textContent || '').trim();
-    if (!text) return [];
-    const lines = text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 1);
-    return lines.map(t => ({ text: t, el: root }));
+    const MAX = 180;
+    const out = [];
+    for (const c of raw) {
+      if (c.text.length <= MAX) { out.push(c); continue; }
+      const parts = c.text.match(/[^.!?…]+[.!?…]+|\s*[^.!?…]+$/g) || [c.text];
+      let buf = '';
+      for (const part of parts) {
+        if ((buf + part).length > MAX && buf) { out.push({ text: buf.trim(), el: c.el }); buf = part; }
+        else buf += part;
+      }
+      if (buf.trim()) out.push({ text: buf.trim(), el: c.el });
+    }
+    return out;
   },
 
   // Chrome cancel-then-speak race: gọi cancel() rồi speak() ngay → silent fail.
@@ -2063,46 +2120,34 @@ const _tts = {
     try { window.speechSynthesis.cancel(); } catch (_) {}
   },
 
-  _keepAliveStart() {
-    clearInterval(this._keepAliveTimer);
-    // Chrome dừng synth nếu utterance > ~15s mà không có event. Ping bằng pause+resume.
-    this._keepAliveTimer = setInterval(() => {
-      if (this.state !== 'playing') return;
-      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-        try { window.speechSynthesis.pause(); window.speechSynthesis.resume(); } catch (_) {}
-      }
-    }, 10000);
-  },
-  _keepAliveStop() {
-    clearInterval(this._keepAliveTimer);
-    this._keepAliveTimer = null;
-  },
-
   _speakIdx() {
     if (this.state !== 'playing') return;
     if (this.idx >= this.chunks.length) { this._finishChapter(); return; }
     const ch = this.chunks[this.idx];
     const u = new SpeechSynthesisUtterance(ch.text);
     u.lang = 'vi-VN';
-    u.rate = (state.settings && state.settings.ttsRate) || 1.0;
-    // CHỈ set voice nếu thực sự tìm được giọng vi — không set bừa null (Safari fail im).
-    // Không có voice vi → để default browser pick theo lang.
+    const rate = (state.settings && state.settings.ttsRate) || 1.0;
+    u.rate = rate;
     if (this.voice) u.voice = this.voice;
 
-    // Chỉ highlight + scroll nếu element là <p> (có ranh giới đoạn rõ).
-    // Khi fallback dùng <br>, el = .reader-content → bỏ qua, vẫn đọc bình thường.
     const canHighlight = ch.el && ch.el.tagName === 'P';
-    u.onend = () => {
-      if (this.state !== 'playing') return;
+
+    // Tiến sang đoạn kế. Gọi từ onend HOẶC watchdog — `done` chống chạy 2 lần.
+    let done = false;
+    const advance = () => {
+      if (done || this.state !== 'playing') return;
+      done = true;
+      clearTimeout(this._watchdog);
       if (canHighlight) ch.el.classList.remove('tts-highlight');
       this.idx++;
       this._speakIdx();
     };
+    u.onend = advance;
     u.onerror = (e) => {
-      console.warn('[tts] utterance error:', e && (e.error || e.message), '— bỏ qua đoạn này');
-      if (canHighlight) ch.el.classList.remove('tts-highlight');
-      if (this.state === 'playing') { this.idx++; this._speakIdx(); }
+      console.warn('[tts] utterance error:', e && (e.error || e.message));
+      advance();
     };
+
     if (canHighlight) {
       ch.el.classList.add('tts-highlight');
       const r = ch.el.getBoundingClientRect();
@@ -2110,6 +2155,20 @@ const _tts = {
         ch.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
+
+    // WATCHDOG: Chrome thường KHÔNG fire onend cho utterance cuối / sau pause.
+    // Nếu quá thời lượng ước tính mà chưa onend → tự tiến (đảm bảo auto-next chạy).
+    // Ước lượng ~13 ký tự/giây ở rate 1.0, +4s buffer.
+    const estMs = (ch.text.length / (13 * rate)) * 1000 + 4000;
+    clearTimeout(this._watchdog);
+    this._watchdog = setTimeout(() => {
+      if (this.state === 'playing' && !done) {
+        console.warn('[tts] watchdog: onend không fire → tự tiến đoạn kế');
+        try { window.speechSynthesis.cancel(); } catch (_) {}
+        advance();
+      }
+    }, estMs);
+
     try { window.speechSynthesis.speak(u); }
     catch (e) { console.error('[tts] speak() throw:', e); this.stop(); }
   },
@@ -2127,17 +2186,13 @@ const _tts = {
     if (!this.chunks.length) { alert('Không có đoạn văn để đọc.'); return; }
 
     // Voice phải lấy ĐỒNG BỘ ngay đây (cache từ _ttsPreload chạy lúc boot).
-    // Nếu chưa có cache (cold boot iOS), getVoices() sync; nếu vẫn rỗng → không set voice.
     const voices = (this._voicesCache && this._voicesCache.length)
       ? this._voicesCache
       : (window.speechSynthesis.getVoices() || []);
-    this.voice =
-      voices.find(v => /^vi[-_]/i.test(v.lang)) ||
-      voices.find(v => /Vietnam/i.test(v.name)) ||
-      null;
     if (voices.length) this._voicesCache = voices;
+    this.voice = this._resolveVoice(voices);
     console.log('[tts] có', voices.length, 'giọng;',
-      this.voice ? 'dùng giọng VI: ' + this.voice.name : 'chưa có giọng VI (fallback default)');
+      this.voice ? 'dùng giọng: ' + this.voice.name + ' (' + this.voice.lang + ')' : 'không set voice → browser default theo lang');
 
     // KHÔNG cancel() nếu synth đang yên — cancel() trước speak() trên iOS gây silent fail.
     if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
@@ -2146,7 +2201,6 @@ const _tts = {
 
     this.idx = 0;
     this.state = 'playing';
-    this._keepAliveStart();
     this._renderBtn();
     // Gọi speak() ĐỒNG BỘ ngay đây — gesture chain còn nguyên
     this._speakIdx();
@@ -2168,7 +2222,7 @@ const _tts = {
 
   // Dọn synth + DOM, KHÔNG đụng flag _autoResumeAfterLoad (cho phép auto-advance tiếp).
   _softStop() {
-    this._keepAliveStop();
+    clearTimeout(this._watchdog);
     try { window.speechSynthesis.cancel(); } catch (_) {}
     document.querySelectorAll('.tts-highlight').forEach(el => el.classList.remove('tts-highlight'));
     this.state = 'idle';
@@ -2205,16 +2259,35 @@ const _tts = {
     else this.resume();
   },
 
-  // Áp rate mới NGAY vào đoạn đang đọc — restart utterance hiện tại với rate mới.
-  // SpeechSynthesisUtterance không hỗ trợ đổi rate giữa chừng → phải cancel + speak lại.
+  // Chọn voice theo ưu tiên: (1) user pick từ Settings → (2) bất kỳ vi-VN/Vietnam → (3) null.
+  // null nghĩa "để browser tự chọn theo u.lang" — tốt hơn set bừa.
+  _resolveVoice(voices) {
+    if (!voices || !voices.length) return null;
+    const want = state.settings && state.settings.ttsVoice;
+    if (want) {
+      const picked = voices.find(v => v.name === want);
+      if (picked) return picked;
+      // Voice user chọn không còn (đổi máy / browser) → fallback
+    }
+    return voices.find(v => /^vi[-_]/i.test(v.lang)) ||
+           voices.find(v => /Vietnam/i.test(v.name)) ||
+           null;
+  },
+
+  // Áp rate/voice mới NGAY vào đoạn đang đọc — restart utterance hiện tại.
+  // SpeechSynthesisUtterance không cho đổi rate/voice giữa chừng → phải cancel + speak lại.
   applyRateLive() {
     this._renderRateBtn();
+    // Re-resolve voice (user có thể vừa đổi voice trong Settings)
+    if (this._voicesCache && this._voicesCache.length) {
+      this.voice = this._resolveVoice(this._voicesCache);
+    }
     if (this.state !== 'playing' && this.state !== 'paused') return;
     const wasPaused = this.state === 'paused';
     try { window.speechSynthesis.cancel(); } catch (_) {}
     this.state = 'playing';
-    this._speakIdx();                              // đọc lại đoạn hiện tại với rate mới
-    if (wasPaused) setTimeout(() => this.pause(), 80);  // giữ trạng thái paused nếu trước đó đang pause
+    this._speakIdx();                              // đọc lại đoạn hiện tại với rate/voice mới
+    if (wasPaused) setTimeout(() => this.pause(), 80);
   },
 
   _renderRateBtn() {
@@ -2611,8 +2684,48 @@ function renderSettingsPanel() {
           <button class="${s.ttsAutoNext === false ? 'active' : ''}" onclick="updateSetting('ttsAutoNext', false)">Tắt</button>
         </div>
       </div>
+
+      <div class="setting-group">
+        <div class="setting-label"><span>Giọng đọc</span></div>
+        ${renderVoiceSelect(s.ttsVoice || '')}
+      </div>
     </div>
   `;
+}
+
+// Render <select> giọng TTS — group theo ngôn ngữ, ưu tiên VI lên đầu.
+// Nếu chưa nạp được voices (cold boot iOS), hiện disabled placeholder.
+function renderVoiceSelect(currentName) {
+  const voices = (_tts && _tts._voicesCache) || window.speechSynthesis.getVoices() || [];
+  if (!voices.length) {
+    return '<select class="voice-select" disabled><option>Đang nạp giọng đọc… (đóng/mở lại Cài đặt sau vài giây)</option></select>';
+  }
+  // Group by lang
+  const groups = new Map();
+  voices.forEach(v => {
+    const key = (v.lang || 'other').toLowerCase();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(v);
+  });
+  // Sort: vi-* → en-* → others (theo lang code)
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    const score = (k) => /^vi/i.test(k) ? 0 : /^en/i.test(k) ? 1 : 2;
+    return score(a) - score(b) || a.localeCompare(b);
+  });
+  const sel = currentName;
+  let html = '<select class="voice-select" onchange="updateSetting(\'ttsVoice\', this.value); _tts.applyRateLive();">';
+  html += '<option value="" ' + (!sel ? 'selected' : '') + '>Tự động (ưu tiên giọng tiếng Việt)</option>';
+  for (const k of sortedKeys) {
+    const list = groups.get(k);
+    html += '<optgroup label="' + escapeHtml(k) + '">';
+    for (const v of list) {
+      const lbl = escapeHtml(v.name) + (v.localService ? '' : ' (cloud)');
+      html += '<option value="' + escapeHtml(v.name) + '" ' + (sel === v.name ? 'selected' : '') + '>' + lbl + '</option>';
+    }
+    html += '</optgroup>';
+  }
+  html += '</select>';
+  return html;
 }
 
 function toggleSettings() {
