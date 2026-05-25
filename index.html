@@ -470,7 +470,8 @@
   .reader-wrap {
     max-width: var(--content-width);
     margin: 0 auto;
-    padding: 32px 24px 120px;
+    /* Header ẩn khi đọc → chừa safe-area trên cho notch/status bar */
+    padding: max(32px, env(safe-area-inset-top, 0px)) 24px 120px;
   }
   .reader-breadcrumb {
     font-size: 13px;
@@ -1084,6 +1085,7 @@
     /* ============ READER ============ */
     .reader-wrap {
       padding: 16px 16px 110px;
+      padding-top: max(16px, env(safe-area-inset-top, 0px));   /* header ẩn → chừa notch */
       padding-bottom: max(110px, calc(80px + env(safe-area-inset-bottom)));
     }
     .reader-title { font-size: calc(var(--reader-font-size) * 1.35); margin-bottom: 22px; padding-bottom: 14px; }
@@ -3377,9 +3379,11 @@ function resumeReading(slug) {
   }
 }
 
-// Auto-save scroll: interval + debounce
-let _scrollStopTimer;
+// Auto-save scroll: interval + debounce. Cũng ghi lại mốc thời gian cuộn gần nhất
+// để gesture "vuốt lên cuối chương" biết trang đã "đứng yên" hay đang cuộn momentum.
+let _scrollStopTimer, _lastScrollAt = 0;
 window.addEventListener('scroll', () => {
+  _lastScrollAt = Date.now();
   clearTimeout(_scrollStopTimer);
   _scrollStopTimer = setTimeout(saveScrollPosition, 500);
 }, { passive: true });
@@ -3425,19 +3429,22 @@ document.addEventListener('touchend', (e) => {
   const dy = t.clientY - _touchStartY;
   const dt = Date.now() - _touchStartT;
 
-  // 1) Vuốt NGANG: |dx| > 60, chủ yếu ngang, nhanh < 600ms → prev/next
-  if (Math.abs(dx) >= 60 && Math.abs(dx) >= Math.abs(dy) * 1.5 && dt <= 600) {
+  // 1) Vuốt NGANG: |dx| ≥ 70, RÕ RÀNG ngang (≥ 2.5× dọc), nhanh < 500ms → prev/next.
+  //    Siết ratio 1.5→2.5 + distance 60→70 để cuộn dọc chéo không nhầm thành đổi chương.
+  if (Math.abs(dx) >= 70 && Math.abs(dx) >= Math.abs(dy) * 2.5 && dt <= 500) {
     if (dx < 0 && state.chapter.nextUrl) openChapter(state.chapter.nextUrl);
     else if (dx > 0 && state.chapter.prevUrl) openChapter(state.chapter.prevUrl);
     return;
   }
 
-  // 2) Vuốt LÊN ở CUỐI chương → chương sau.
-  //    Điều kiện chặt để không nhầm với cuộn thường:
-  //    - đã ở đáy trang lúc bắt đầu VÀ vẫn ở đáy lúc kết thúc (không cuộn được nữa)
-  //    - dy < -80 (vuốt lên rõ), chủ yếu dọc, không quá chậm
-  if (_touchStartAtBottom && _pageAtBottom() &&
-      dy < -80 && Math.abs(dy) >= Math.abs(dx) * 1.5 && dt <= 800 &&
+  // 2) Vuốt LÊN ở CUỐI chương → chương sau. Điều kiện RẤT chặt để KHÔNG nhầm với
+  //    cuộn-xuống thường (cuộn xuống = vuốt ngón lên). Nguyên nhân bug cũ: lúc gần đáy
+  //    flick lên để cuộn tiếp → trang chạm đáy → bị tính là "sang chương".
+  //    Fix: bắt buộc trang ĐÃ ĐỨNG YÊN ở đáy ≥ 450ms (không còn cuộn momentum) +
+  //    flick lên dứt khoát ≥ 110px + rất dọc (≥ 3× ngang) + nhanh (< 500ms).
+  const settled = (Date.now() - _lastScrollAt) > 450;   // không cuộn gì trong 450ms qua
+  if (_touchStartAtBottom && _pageAtBottom() && settled &&
+      dy < -110 && Math.abs(dy) >= Math.abs(dx) * 3 && dt <= 500 &&
       state.chapter.nextUrl) {
     openChapter(state.chapter.nextUrl);
   }
@@ -3501,17 +3508,19 @@ document.addEventListener('touchend', (e) => {
 
 // ========== MAIN RENDER ==========
 function render() {
-  document.getElementById('header').innerHTML = renderHeader();
+  const headerEl = document.getElementById('header');
+  headerEl.innerHTML = renderHeader();
   const main = document.getElementById('main');
   if (state.view === 'home') main.innerHTML = renderHome();
   else if (state.view === 'search') main.innerHTML = renderSearch();
   else if (state.view === 'detail') main.innerHTML = renderStoryDetail();
   else if (state.view === 'reader') {
     main.innerHTML = renderReader();
-    // Set page bg to match reader theme
+    headerEl.style.display = 'none';          // ẩn thanh tìm/header → đọc fullscreen
     document.body.style.background = 'var(--reader-bg)';
     return;
   }
+  headerEl.style.display = '';                 // các view khác: hiện lại header
   document.body.style.background = 'var(--bg)';
 }
 
