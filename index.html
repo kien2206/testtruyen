@@ -3408,20 +3408,18 @@ function toggleDesc(btn) {
 }
 
 // ========== Swipe gesture: CHỈ vuốt-lên-cuối-chương → chương sau ==========
-// Bỏ HẲN vuốt NGANG prev/next: user phàn nàn nhiều lần là hay bị nhảy chương
-// (đặc biệt iOS edge-swipe + cầm 1 tay → drift ngang). Đã có cách khác:
+// User yêu cầu BỎ HẲN vuốt ngang prev/next (gây nhảy chương nhầm). Đã có cách khác:
 //   - Nút prev/next trong toolbar đáy reader
 //   - Phím ArrowLeft / ArrowRight (desktop)
 //   - Tap dòng "Vuốt lên / chạm" ở cuối chương
 //   - Picker chương (nút "Chọn chương" trên toolbar)
-// Vuốt-lên-cuối-chương GIỮ LẠI vì rất chặt: phải ở đáy + trang đứng yên + flick mạnh.
-let _touchStartX = 0, _touchStartY = 0, _touchStartT = 0, _touchStartAtBottom = false, _touchValid = false;
+let _touchStartX = 0, _touchStartY = 0, _touchStartT = 0,
+    _touchStartAtBottom = false, _touchValid = false;
 function _pageAtBottom() {
   const doc = document.documentElement;
   return (window.scrollY + window.innerHeight) >= (doc.scrollHeight - 6);
 }
 document.addEventListener('touchstart', (e) => {
-  // Chỉ xử lý đơn-chạm (multi-touch như pinch không tính là swipe)
   _touchValid = (e.touches.length === 1);
   if (!_touchValid) return;
   const t = e.touches[0];
@@ -3440,11 +3438,10 @@ document.addEventListener('touchend', (e) => {
   const dy = t.clientY - _touchStartY;
   const dt = Date.now() - _touchStartT;
 
-  // Vuốt LÊN ở CUỐI chương → chương sau. Điều kiện RẤT chặt để KHÔNG nhầm cuộn-dọc:
-  //   - bắt đầu vuốt khi ĐÃ ở đáy
-  //   - kết thúc vẫn ở đáy
-  //   - trang ĐÃ ĐỨNG YÊN ≥ 450ms (không còn cuộn momentum)
-  //   - flick lên dứt khoát ≥ 110px, rất dọc (≥ 3× ngang), nhanh < 500ms
+  // CHỈ vuốt LÊN ở CUỐI chương → chương sau. Rất chặt để không nhầm cuộn-dọc:
+  //   - bắt đầu + kết thúc đều ở đáy
+  //   - trang đã đứng yên ≥ 450ms (hết momentum)
+  //   - flick lên ≥ 110px, rất dọc (≥ 3× ngang), nhanh < 500ms
   const settled = (Date.now() - _lastScrollAt) > 450;
   if (_touchStartAtBottom && _pageAtBottom() && settled &&
       dy < -110 && Math.abs(dy) >= Math.abs(dx) * 3 && dt <= 500) {
