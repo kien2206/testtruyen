@@ -3407,21 +3407,32 @@ function toggleDesc(btn) {
   btn.textContent = expanded ? 'Thu gọn' : 'Xem thêm';
 }
 
-// ========== Swipe gesture: prev/next chapter + vuốt-lên-cuối-chương ==========
-let _touchStartX = 0, _touchStartY = 0, _touchStartT = 0, _touchStartAtBottom = false;
+// ========== Swipe gesture: CHỈ vuốt-lên-cuối-chương → chương sau ==========
+// Bỏ HẲN vuốt NGANG prev/next: user phàn nàn nhiều lần là hay bị nhảy chương
+// (đặc biệt iOS edge-swipe + cầm 1 tay → drift ngang). Đã có cách khác:
+//   - Nút prev/next trong toolbar đáy reader
+//   - Phím ArrowLeft / ArrowRight (desktop)
+//   - Tap dòng "Vuốt lên / chạm" ở cuối chương
+//   - Picker chương (nút "Chọn chương" trên toolbar)
+// Vuốt-lên-cuối-chương GIỮ LẠI vì rất chặt: phải ở đáy + trang đứng yên + flick mạnh.
+let _touchStartX = 0, _touchStartY = 0, _touchStartT = 0, _touchStartAtBottom = false, _touchValid = false;
 function _pageAtBottom() {
   const doc = document.documentElement;
   return (window.scrollY + window.innerHeight) >= (doc.scrollHeight - 6);
 }
 document.addEventListener('touchstart', (e) => {
+  // Chỉ xử lý đơn-chạm (multi-touch như pinch không tính là swipe)
+  _touchValid = (e.touches.length === 1);
+  if (!_touchValid) return;
   const t = e.touches[0];
   _touchStartX = t.clientX;
   _touchStartY = t.clientY;
   _touchStartT = Date.now();
-  _touchStartAtBottom = _pageAtBottom();   // đã ở đáy trang khi BẮT ĐẦU vuốt?
+  _touchStartAtBottom = _pageAtBottom();
 }, { passive: true });
 document.addEventListener('touchend', (e) => {
-  if (state.view !== 'reader' || !state.chapter) return;
+  if (!_touchValid) return;
+  if (state.view !== 'reader' || !state.chapter || !state.chapter.nextUrl) return;
   const tag = (e.target.tagName || '').toUpperCase();
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || e.target.closest('.toolbar')) return;
   const t = e.changedTouches[0];
@@ -3429,23 +3440,14 @@ document.addEventListener('touchend', (e) => {
   const dy = t.clientY - _touchStartY;
   const dt = Date.now() - _touchStartT;
 
-  // 1) Vuốt NGANG: |dx| ≥ 70, RÕ RÀNG ngang (≥ 2.5× dọc), nhanh < 500ms → prev/next.
-  //    Siết ratio 1.5→2.5 + distance 60→70 để cuộn dọc chéo không nhầm thành đổi chương.
-  if (Math.abs(dx) >= 70 && Math.abs(dx) >= Math.abs(dy) * 2.5 && dt <= 500) {
-    if (dx < 0 && state.chapter.nextUrl) openChapter(state.chapter.nextUrl);
-    else if (dx > 0 && state.chapter.prevUrl) openChapter(state.chapter.prevUrl);
-    return;
-  }
-
-  // 2) Vuốt LÊN ở CUỐI chương → chương sau. Điều kiện RẤT chặt để KHÔNG nhầm với
-  //    cuộn-xuống thường (cuộn xuống = vuốt ngón lên). Nguyên nhân bug cũ: lúc gần đáy
-  //    flick lên để cuộn tiếp → trang chạm đáy → bị tính là "sang chương".
-  //    Fix: bắt buộc trang ĐÃ ĐỨNG YÊN ở đáy ≥ 450ms (không còn cuộn momentum) +
-  //    flick lên dứt khoát ≥ 110px + rất dọc (≥ 3× ngang) + nhanh (< 500ms).
-  const settled = (Date.now() - _lastScrollAt) > 450;   // không cuộn gì trong 450ms qua
+  // Vuốt LÊN ở CUỐI chương → chương sau. Điều kiện RẤT chặt để KHÔNG nhầm cuộn-dọc:
+  //   - bắt đầu vuốt khi ĐÃ ở đáy
+  //   - kết thúc vẫn ở đáy
+  //   - trang ĐÃ ĐỨNG YÊN ≥ 450ms (không còn cuộn momentum)
+  //   - flick lên dứt khoát ≥ 110px, rất dọc (≥ 3× ngang), nhanh < 500ms
+  const settled = (Date.now() - _lastScrollAt) > 450;
   if (_touchStartAtBottom && _pageAtBottom() && settled &&
-      dy < -110 && Math.abs(dy) >= Math.abs(dx) * 3 && dt <= 500 &&
-      state.chapter.nextUrl) {
+      dy < -110 && Math.abs(dy) >= Math.abs(dx) * 3 && dt <= 500) {
     openChapter(state.chapter.nextUrl);
   }
 }, { passive: true });
