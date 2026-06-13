@@ -1306,7 +1306,11 @@
 
 <script>
 // ========== CONFIG ==========
-const BASE = 'https://truyenfull.vision';
+// 2026-06: truyenfull.vision bị Cloudflare chặn 403 toàn cục. Site đã chuyển
+// sang truyenfull.today với URL pattern mới: /truyen-<slug>/[chuong-N/]
+// (trước: /<slug>/[chuong-N/]). Selector parser (#chapter-c, #list-chapter,
+// .desc-text, .truyen-title, #prev_chap, #next_chap, .book img, ...) GIỮ NGUYÊN.
+const BASE = 'https://truyenfull.today';
 const TRUYENHOAN_BASE = 'https://truyenhoan.com';   // truyenfull clone — đọc full content trong app
 
 // ➤ Cloudflare Worker proxy — dùng khi app host trên GitHub Pages.
@@ -1332,10 +1336,12 @@ const PUBLIC_PROXIES = [
   { name: 'codetabs', build: url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url) },
   { name: 'thingproxy', build: url => 'https://thingproxy.freeboard.io/fetch/' + url },
 ];
-// Các tên miền mirror của truyenfull (cùng IP, cùng kho truyện, cùng HTML).
+// Các tên miền mirror của truyenfull (cùng kho truyện, cùng HTML).
 // Khi domain chính fail toàn bộ proxy chain → fetchPage thử lần lượt các mirror này.
-// Hiện tại chỉ truyenfull.vision sống ổn định; còn lại để sẵn cho khi server bật trở lại.
+// 2026-06: .today là domain LIVE. Các domain cũ (.vision/.io/.vn/.so/.world) giữ
+// làm fallback phòng khi .today cũng bị chặn — chúng có thể up lại bất cứ lúc nào.
 const MIRROR_HOSTS = [
+  'truyenfull.vision',
   'truyenfull.io',
   'truyenfull.vn',
   'truyenfull.so',
@@ -1538,18 +1544,21 @@ function absoluteUrl(href) {
 }
 
 // Trích slug truyện từ URL. Source-agnostic — xử lý:
-//   - truyenfull   /<slug>/...          → <slug>
-//   - truyenhoan   /<slug>.<id>/...     → <slug>  (bỏ ".<id>" hậu tố)
+//   - truyenfull cũ      /<slug>/...           → <slug>
+//   - truyenfull.today   /truyen-<slug>/...    → <slug>   (bỏ tiền tố "truyen-")
+//   - truyenhoan         /<slug>.<id>/...      → <slug>   (bỏ hậu tố ".<id>")
 function slugFromUrl(url) {
   try {
     const u = new URL(url);
-    // Lấy segment đầu tiên có nghĩa của path, bỏ hậu tố ".<số>" (truyenhoan).
-    const seg = (u.pathname.split('/').filter(Boolean)[0] || '').replace(/\.\d+$/, '');
+    let seg = u.pathname.split('/').filter(Boolean)[0] || '';
+    seg = seg.replace(/\.\d+$/, '');          // truyenhoan: bỏ ".<id>"
+    seg = seg.replace(/^truyen-/, '');        // truyenfull.today: bỏ "truyen-"
     return seg || url;
   } catch (_) {
     // Fallback an toàn cho input không phải URL chuẩn
     const m = url.match(/\/([^\/]+)/);
-    return m ? m[1] : url;
+    if (!m) return url;
+    return m[1].replace(/\.\d+$/, '').replace(/^truyen-/, '');
   }
 }
 
@@ -1597,7 +1606,7 @@ class SiteStructureError extends Error {
 function assertStructure(cond, where, detail) {
   if (!cond) {
     throw new SiteStructureError(
-      'truyenfull.vision có thể đã thay đổi cấu trúc trang — ' + detail +
+      'truyenfull có thể đã thay đổi cấu trúc trang — ' + detail +
       ' Parser cần được cập nhật lại selector.',
       where
     );
@@ -1818,10 +1827,19 @@ function parseChapter(doc, url) {
   const validPrev = prevUrl && !prevUrl.includes('javascript') && !prevEl.classList.contains('disabled');
   const validNext = nextUrl && !nextUrl.includes('javascript') && !nextEl.classList.contains('disabled');
 
-  // Find story slug from breadcrumb or chapter URL
-  const storyLink = pickEl(doc, '.truyen-title a[href*="truyenfull"]', 'h2.truyen-title a', '.chapter h2 a');
+  // Tìm link tới trang truyện (để lấy slug + tên truyện cho breadcrumb reader).
+  // truyenfull.today (2026-06): <a class="truyen-title" href=".../truyen-<slug>/">
+  //   → cần selector cho <a> TRỰC TIẾP, không phải <a> con của .truyen-title.
+  // Fallback breadcrumb (schema.org BreadcrumbList) — bền vững nhất nếu HTML đổi tiếp.
+  const storyLink = pickEl(doc,
+    'a.truyen-title[href*="truyen"]',                // truyenfull.today: thẻ <a class="truyen-title">
+    '.truyen-title a[href*="truyen"]',               // dạng cũ (nest): <span class="truyen-title"><a ...>
+    'h2.truyen-title a',
+    '.breadcrumb h1 a[href*="/truyen-"]',            // breadcrumb của .today
+    '.breadcrumb a[itemprop="item"][href*="/truyen-"]'
+  );
   const storyUrl = storyLink ? absoluteUrl(attr(storyLink, 'href')) : '';
-  const storyTitle = txt(storyLink);
+  const storyTitle = txt(storyLink) || attr(storyLink, 'title') || '';
   const slug = slugFromUrl(url).replace(/-chuong.*$/, '');
 
   return {
@@ -2664,7 +2682,7 @@ function renderError(msg, retryFn) {
     <div class="error-box${isSite ? ' error-site' : ''}">
       <h3>${isSite ? '⚠️ Trang nguồn có thể đã thay đổi' : 'Đã xảy ra lỗi'}</h3>
       <p>${escapeHtml(msg).replace(/\n/g, '<br>')}</p>
-      ${isSite ? `<p class="error-hint">truyenfull.vision có thể đã đổi giao diện/HTML nên app không bóc được dữ liệu. Cần cập nhật lại các bộ chọn (selector) trong phần <b>PARSERS</b> của file này. (Đây không phải lỗi mạng — lỗi mạng/proxy sẽ có nội dung khác.)</p>` : ''}
+      ${isSite ? `<p class="error-hint">Nguồn truyện có thể đã đổi giao diện/HTML hoặc đổi domain nên app không bóc được dữ liệu. Cần cập nhật lại <b>BASE</b> hoặc selector trong phần <b>PARSERS</b> của file này. (Đây không phải lỗi mạng — lỗi mạng/proxy sẽ có nội dung khác.)</p>` : ''}
       ${retryFn ? `<button class="retry-btn" onclick="window.__retry && window.__retry()">Thử lại</button>` : ''}
     </div>
   `;
