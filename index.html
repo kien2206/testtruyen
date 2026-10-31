@@ -1306,11 +1306,10 @@
 
 <script>
 // ========== CONFIG ==========
-// 2026-06: truyenfull.vision bị Cloudflare chặn 403 toàn cục. Site đã chuyển
-// sang truyenfull.today với URL pattern mới: /truyen-<slug>/[chuong-N/]
-// (trước: /<slug>/[chuong-N/]). Selector parser (#chapter-c, #list-chapter,
-// .desc-text, .truyen-title, #prev_chap, #next_chap, .book img, ...) GIỮ NGUYÊN.
-const BASE = 'https://truyenfull.today';
+// 2026-10: truyenfull.today/.vision/.vn chết (Cloudflare 521) và bị nhà mạng VN chặn TLS.
+// Site chuyển sang truyenfull.live, URL quay về dạng /<slug>/[chuong-N/] (không còn tiền tố
+// "truyen-" của .today — slugFromUrl xử lý cả hai). Selector parser GIỮ NGUYÊN.
+const BASE = 'https://truyenfull.live';
 const TRUYENHOAN_BASE = 'https://truyenhoan.com';   // truyenfull clone — đọc full content trong app
 
 // ➤ Cloudflare Worker proxy — dùng khi app host trên GitHub Pages.
@@ -1334,18 +1333,16 @@ const PUBLIC_PROXIES = [
   { name: 'allorigins', build: url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url) },
   { name: 'corsproxy.io', build: url => 'https://corsproxy.io/?' + encodeURIComponent(url) },
   { name: 'codetabs', build: url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url) },
-  { name: 'thingproxy', build: url => 'https://thingproxy.freeboard.io/fetch/' + url },
+  // thingproxy.freeboard.io đã mất DNS (2026-10) → bỏ.
 ];
 // Các tên miền mirror của truyenfull (cùng kho truyện, cùng HTML).
 // Khi domain chính fail toàn bộ proxy chain → fetchPage thử lần lượt các mirror này.
-// 2026-06: .today là domain LIVE. Các domain cũ (.vision/.io/.vn/.so/.world) giữ
-// làm fallback phòng khi .today cũng bị chặn — chúng có thể up lại bất cứ lúc nào.
+// 2026-10: giữ .today/.vision/.vn phòng khi up lại. Bỏ .io (domain bị chiếm, trả trang
+// quảng cáo "Redirecting..." → app tưởng site đổi cấu trúc), .so/.world (mất DNS).
 const MIRROR_HOSTS = [
+  'truyenfull.today',
   'truyenfull.vision',
-  'truyenfull.io',
   'truyenfull.vn',
-  'truyenfull.so',
-  'truyenfull.world',
 ];
 const PAGE_SIZE = 60; // chapters per page in list
 
@@ -1454,7 +1451,11 @@ async function tryFetch(proxyUrl, label) {
   try {
     const res = await fetch(proxyUrl, { signal: ctrl.signal });
     clearTimeout(timer);
-    if (!res.ok) throw new Error(label + ' HTTP ' + res.status);
+    if (!res.ok) {
+      const err = new Error(label + ' HTTP ' + res.status);
+      err.status = res.status;
+      throw err;
+    }
     const ct = res.headers.get('content-type') || '';
     let html;
     if (ct.includes('application/json')) {
@@ -1471,9 +1472,24 @@ async function tryFetch(proxyUrl, label) {
 }
 
 // Đổi hostname trong URL sang `newHost`, giữ nguyên path/query. Trả '' nếu URL hỏng.
+// Riêng link truyenfull.today (/truyen-<slug>/...) đổi sang domain khác thì bỏ tiền tố
+// "truyen-", vì các domain còn lại dùng /<slug>/... (vd: lịch sử đọc lưu link .today cũ).
 function swapHost(url, newHost) {
-  try { const u = new URL(url); u.hostname = newHost; return u.toString(); }
+  try {
+    const u = new URL(url);
+    if (u.hostname.replace(/^www\./, '') === 'truyenfull.today' && newHost !== 'truyenfull.today') {
+      u.pathname = u.pathname.replace(/^\/truyen-/, '/');
+    }
+    u.hostname = newHost;
+    return u.toString();
+  }
   catch (_) { return ''; }
+}
+
+// Cloudflare 520–527 = proxy tới được Cloudflare nhưng máy chủ gốc chết. Proxy công cộng
+// cũng sẽ fail (chỉ tốn thêm ~30s chờ timeout) → dừng sớm.
+function isOriginDown(e) {
+  return e && e.status >= 520 && e.status <= 527;
 }
 
 // Thử URL với toàn bộ chuỗi proxy (local + public). Throw nếu tất cả fail.
@@ -1483,7 +1499,12 @@ async function _fetchPageOnce(url) {
     try {
       const html = await tryFetch(LOCAL_PROXY + encodeURIComponent(url), 'local');
       return new DOMParser().parseFromString(html, 'text/html');
-    } catch (e) { errors.push('local: ' + e.message); console.warn('Local proxy fail:', e.message); }
+    } catch (e) {
+      errors.push('local: ' + e.message); console.warn('Local proxy fail:', e.message);
+      if (isOriginDown(e)) {
+        throw new Error('Trang nguồn ' + new URL(url).hostname + ' đang không phản hồi (HTTP ' + e.status + '). Thử lại sau.');
+      }
+    }
   }
   for (const p of PUBLIC_PROXIES) {
     try {
@@ -1502,9 +1523,13 @@ async function fetchPage(url) {
   try {
     return await _fetchPageOnce(url);
   } catch (firstErr) {
-    // Mirror fallback: domain chính chết toàn diện → thử lần lượt từng mirror.
-    // Vì các mirror cùng host structure, chỉ cần đổi hostname.
-    for (const host of MIRROR_HOSTS) {
+    // Mirror fallback chỉ dành cho truyenfull (nguồn khác như truyenhoan không có mirror).
+    let host0 = '';
+    try { host0 = new URL(url).hostname; } catch (_) {}
+    if (!/(^|\.)truyenfull\./.test(host0)) throw firstErr;
+    // Domain chính chết → thử domain LIVE (BASE) rồi lần lượt từng mirror; cùng cấu trúc HTML.
+    const hosts = [new URL(BASE).hostname, ...MIRROR_HOSTS];
+    for (const host of hosts) {
       const alt = swapHost(url, host);
       if (!alt || alt === url) continue;
       try {
@@ -1541,6 +1566,15 @@ function absoluteUrl(href) {
   if (href.startsWith('//')) return 'https:' + href;
   if (href.startsWith('/')) return BASE + href;
   return BASE + '/' + href;
+}
+
+// static.truyenfull.live chặn hotlink (thiếu Referer truyenfull → 403), nên ảnh bìa truyenfull
+// đi qua proxy — proxy gửi Referer đúng. Ảnh nguồn khác giữ nguyên link gốc.
+function coverSrc(url) {
+  if (!url || !PROXY_BASE) return url || '';
+  let host = '';
+  try { host = new URL(url).hostname; } catch (_) { return url; }
+  return /(^|\.)truyenfull\./.test(host) ? PROXY_BASE + '/proxy?url=' + encodeURIComponent(url) : url;
 }
 
 // Trích slug truyện từ URL. Source-agnostic — xử lý:
@@ -2439,7 +2473,7 @@ function renderHome() {
         ${history.map(h => {
           const letter = (h.title || '?').charAt(0).toUpperCase();
           const coverHtml = h.cover
-            ? `<img class="recent-cover-img" src="${escapeHtml(h.cover)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'recent-cover',textContent:${jsAttr(letter)}}))">`
+            ? `<img class="recent-cover-img" src="${escapeHtml(coverSrc(h.cover))}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'recent-cover',textContent:${jsAttr(letter)}}))">`
             : `<div class="recent-cover">${escapeHtml(letter)}</div>`;
           return `
             <button class="recent-card" onclick='resumeReading(${jsAttr(h.slug)})'>
@@ -2512,7 +2546,7 @@ function renderSearch() {
     <div class="results-grid">
       ${state.searchResults.map(r => `
         <div class="result-card" onclick='openStory(${jsAttr(r.url)})'>
-          <img src="${escapeHtml(r.cover) || 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 70 100%22><rect width=%2270%22 height=%22100%22 fill=%22%2325221d%22/></svg>'}" alt="" loading="lazy" onerror="this.style.opacity=0.3">
+          <img src="${escapeHtml(coverSrc(r.cover)) || 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 70 100%22><rect width=%2270%22 height=%22100%22 fill=%22%2325221d%22/></svg>'}" alt="" loading="lazy" onerror="this.style.opacity=0.3">
           <div class="result-info">
             ${r.source === 'truyenhoan' ? '<span class="result-source-badge">truyenhoan</span>' : ''}
             <div class="result-title">${escapeHtml(r.title)}</div>
@@ -2542,7 +2576,7 @@ function renderStoryDetail() {
 
   return `
     <div class="story-header">
-      <img class="story-cover" src="${escapeHtml(s.cover)}" alt="" onerror="this.style.opacity=0.3">
+      <img class="story-cover" src="${escapeHtml(coverSrc(s.cover))}" alt="" onerror="this.style.opacity=0.3">
       <div class="story-info">
         <h1 class="story-title">${escapeHtml(s.title)}</h1>
         <div class="story-meta-row">
